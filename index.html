@@ -1,0 +1,1140 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Visor AR — Vía (RoadExtract)</title>
+<style>
+  :root{
+    --bg:#0e1418; --panel:#17212b; --panel2:#1e2b36; --line:#2b3a47;
+    --tx:#dbe7ef; --mut:#8aa0b0; --accent:#2f9de0; --accent2:#2a6f97;
+    --asfalto:#3a4550; --linea:#e8d24a; --borde:#e9edf1;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--tx);
+    font-family:"Segoe UI",system-ui,-apple-system,Arial,sans-serif;overflow:hidden}
+  #cam{position:fixed;inset:0;width:100%;height:100%;object-fit:cover;z-index:0;display:none;background:#000}
+  #stage{position:fixed;inset:0;z-index:1}
+  canvas{display:block;touch-action:none}
+
+  #drop{position:fixed;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;
+    background:radial-gradient(120% 120% at 50% 0%,#16222d 0%,#0e1418 70%);padding:24px}
+  #drop.hide{display:none}
+  .card{width:min(540px,92vw);background:var(--panel);border:1px solid var(--line);
+    border-radius:14px;padding:26px 24px;box-shadow:0 18px 50px rgba(0,0,0,.55)}
+  .card h1{margin:0 0 4px;font-size:19px;font-weight:700;letter-spacing:.2px}
+  .card p{margin:6px 0;color:var(--mut);font-size:13px;line-height:1.55}
+  .pick{margin-top:18px;display:block;width:100%;text-align:center;cursor:pointer;
+    background:var(--accent2);color:#fff;border:0;border-radius:10px;padding:13px;font-size:15px;font-weight:600}
+  .pick:active{background:var(--accent)}
+  #drop small{display:block;margin-top:12px;color:#6f8494;font-size:11.5px;line-height:1.5}
+
+  #hud{position:fixed;z-index:10;left:0;right:0;top:0;display:flex;gap:6px;padding:10px;
+    justify-content:center;flex-wrap:wrap;pointer-events:none}
+  .seg{display:flex;background:var(--panel);border:1px solid var(--line);border-radius:10px;
+    overflow:hidden;pointer-events:auto;box-shadow:0 4px 14px rgba(0,0,0,.4)}
+  .seg button{background:transparent;color:var(--mut);border:0;padding:9px 13px;font-size:13px;
+    font-weight:600;cursor:pointer}
+  .seg button.on{background:var(--accent2);color:#fff}
+  .seg button+button{border-left:1px solid var(--line)}
+
+  #panel{position:fixed;z-index:10;right:10px;bottom:64px;width:min(290px,86vw);
+    background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 13px;
+    box-shadow:0 8px 26px rgba(0,0,0,.5);display:none;
+    /* [fixmobile] nunca debe tapar toda la pantalla: altura tope + scroll interno */
+    max-height:calc(100vh - 140px - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px));
+    overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+  #panel.show{display:block}
+  /* Encabezado del panel con botón de cerrar (accesible aunque tape el engranaje) */
+  #panelHead{display:flex;align-items:center;justify-content:space-between;gap:8px;
+    position:sticky;top:-2px;background:var(--panel);padding-bottom:6px;margin-bottom:2px;z-index:1}
+  #panelClose{flex:0 0 auto;width:28px;height:28px;border-radius:8px;border:1px solid var(--line);
+    background:var(--panel2);color:var(--mut);font-size:15px;line-height:1;cursor:pointer}
+  #panelClose:active{background:var(--accent2);color:#fff}
+  #panel h3{margin:0 0 8px;font-size:12.5px;color:var(--mut);font-weight:700}
+  .row{display:flex;align-items:center;gap:9px;margin:9px 0}
+  .row label{flex:0 0 82px;font-size:12px;color:var(--mut)}
+  .row input[type=range]{flex:1;accent-color:var(--accent)}
+  .row .val{flex:0 0 52px;text-align:right;font-size:12px;font-variant-numeric:tabular-nums}
+  .btn{width:100%;background:var(--panel2);color:var(--tx);border:1px solid var(--line);
+    border-radius:9px;padding:10px;font-size:13px;font-weight:600;cursor:pointer;margin-top:6px}
+  .btn:active{background:var(--accent2)}
+  .btn.warn{border-color:#7a4a2a;color:#f0b58a}
+  .btn.primary{background:var(--accent2);border-color:var(--accent2);color:#fff}
+
+  #hb{position:fixed;z-index:10;left:10px;bottom:10px;background:var(--panel);border:1px solid var(--line);
+    border-radius:12px;padding:9px 12px;box-shadow:0 8px 26px rgba(0,0,0,.5);font-size:11px;color:var(--mut);
+    min-width:150px;display:none}
+  #hb.show{display:block}
+  #hb b{color:var(--tx);font-variant-numeric:tabular-nums}
+
+  #gear{position:fixed;z-index:10;right:10px;bottom:10px;width:46px;height:46px;border-radius:50%;
+    background:var(--accent2);color:#fff;border:0;font-size:20px;cursor:pointer;
+    box-shadow:0 6px 18px rgba(0,0,0,.5)}
+  #gear.hide{display:none}
+  #note{position:fixed;z-index:10;left:50%;top:56px;transform:translateX(-50%);
+    background:rgba(20,30,38,.92);border:1px solid var(--line);color:var(--mut);
+    font-size:11.5px;padding:6px 12px;border-radius:20px;max-width:90vw;text-align:center;display:none}
+  #note.show{display:block}
+
+  /* ═══ [fixmobile] Ajustes para celular (Android/iOS) ═══
+     - El panel se vuelve una "hoja inferior" a lo ancho, con tope de altura y scroll.
+     - Se respetan las barras del sistema (safe-area).
+     - El engranaje y los HUD se separan de los bordes seguros. */
+  #gear{ right:calc(10px + env(safe-area-inset-right,0px));
+         bottom:calc(64px + env(safe-area-inset-bottom,0px)); }   /* [badge] deja libre la esquina de la insignia de Netlify */
+  #hb{ left:calc(10px + env(safe-area-inset-left,0px));
+       bottom:calc(10px + env(safe-area-inset-bottom,0px)); }
+  #hud{ padding-top:calc(10px + env(safe-area-inset-top,0px)); }
+
+  @media (max-width:600px), (pointer:coarse){
+    #panel{
+      left:8px; right:8px; width:auto;
+      bottom:calc(62px + env(safe-area-inset-bottom,0px));
+      max-height:min(66vh, calc(100vh - 140px - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px)));
+      border-radius:16px 16px 12px 12px;
+    }
+    /* Deja sitio para no chocar con el engranaje flotante */
+    #panel.show{ padding-bottom:64px; }
+    #gear{ width:52px;height:52px;font-size:22px; z-index:11; }
+    #panelClose{ width:34px;height:34px;font-size:17px; }
+    .seg button{ padding:10px 12px; }
+  }
+  /* [nav2] */
+  .inp{flex:1;min-width:0;background:var(--panel2);color:var(--tx);border:1px solid var(--line);
+    border-radius:8px;padding:7px;font-size:12px}
+  .sub{font-size:11.5px;color:var(--mut);margin:12px 0 2px;border-top:1px solid var(--line);padding-top:10px;line-height:1.45}
+  .btn:disabled{opacity:.6}
+  #centerBtn{position:fixed;z-index:10;right:calc(10px + env(safe-area-inset-right,0px));
+    bottom:calc(128px + env(safe-area-inset-bottom,0px));background:var(--panel);color:var(--tx);
+    border:1px solid var(--line);border-radius:22px;padding:10px 14px;font-size:13px;font-weight:600;
+    cursor:pointer;box-shadow:0 6px 18px rgba(0,0,0,.5)}
+  #centerBtn.hide{display:none}
+  /* [gpsperm] ayuda de permisos GPS */
+  #gpsHelp{position:fixed;inset:0;z-index:30;background:rgba(0,0,0,.72);display:flex;align-items:center;justify-content:center;padding:16px}
+  #gpsHelp.hide{display:none}
+  #gpsHelp .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;max-width:420px;width:100%;
+    max-height:88vh;overflow:auto;padding:18px;box-shadow:0 20px 50px rgba(0,0,0,.6)}
+  #gpsHelp h3{margin:0 0 8px;font-size:17px}
+  #gpsHelp p{margin:6px 0;font-size:13.5px;line-height:1.5;color:var(--tx)}
+  #gpsHelp ol{margin:6px 0 10px;padding-left:20px;font-size:13.5px;line-height:1.55}
+  #gpsHelp .tag{font-size:12px;color:var(--mut);margin-top:10px;font-weight:600}
+  </style>
+</head>
+<body>
+
+<video id="cam" playsinline muted autoplay></video>
+<div id="stage"></div>
+
+<div id="hud">
+  <div class="seg" id="modeSeg">
+    <button data-m="orbit" class="on">Vista</button>
+    <button data-m="map">Mapa en vivo</button>
+    <button data-m="walk">Recorrer</button>
+    <button data-m="ar">AR</button>
+  </div>
+</div>
+<div id="note"></div>
+<div id="gpsHelp" class="hide"><div class="card">
+  <h3 id="gpsHelpT">📍 Activa la ubicación</h3>
+  <div id="gpsHelpB"></div>
+  <button class="btn primary" id="gpsHelpRetry">🔄 Ya lo activé — reintentar</button>
+  <button class="btn" id="gpsHelpClose">Cerrar</button>
+</div></div>
+
+<div id="hb">
+  <div>Abscisa: <b id="hbAbs">—</b></div>
+  <div>Lateral: <b id="hbLat">—</b></div>
+  <div>Rumbo eje: <b id="hbAz">—</b></div>
+  <div>GPS: <b id="hbGps">—</b></div>
+  <div>Orientación: <b id="hbHdg">—</b></div>
+  <div>Ancla: <b id="hbAnc">—</b></div>
+</div>
+
+<button id="centerBtn" class="hide">📍 Centrar</button>
+<button id="gear">⚙</button>
+<div id="panel">
+  <div id="panelHead"><h3 id="panelTitle" style="margin:0">Ajustes de vista</h3><button id="panelClose" aria-label="Cerrar">✕</button></div>
+  <div id="arControls" style="display:none">
+    <div class="row"><label>Altura ojo</label><input id="eye" type="range" min="1" max="3" step="0.1" value="1.6"><span class="val" id="eyeV">1.6 m</span></div>
+    <div class="row"><label>Rumbo fino</label><input id="yawFine" type="range" min="-30" max="30" step="0.5" value="0"><span class="val" id="yawFineV">0°</span></div>
+    <div class="row"><label>Mover obs.</label>
+      <div style="flex:1;display:grid;grid-template-columns:repeat(4,1fr);gap:6px">
+        <button class="btn" id="mvL" style="margin:0;padding:8px" title="izquierda">◀</button>
+        <button class="btn" id="mvR" style="margin:0;padding:8px" title="derecha">▶</button>
+        <button class="btn" id="mvF" style="margin:0;padding:8px" title="adelante">▲</button>
+        <button class="btn" id="mvB" style="margin:0;padding:8px" title="atrás">▼</button>
+      </div></div>
+    <div class="row"><label>Orientación</label>
+      <select id="hdgSrc" class="inp">
+        <option value="compass">🧭 Brújula (auto)</option>
+        <option value="gps">🚶 GPS al caminar</option>
+        <option value="manual">✋ Manual (calibrar)</option>
+      </select></div>
+    <div class="row"><label>Decl. mag. (°)</label><input id="decl" class="inp" type="number" step="0.1" min="-30" max="30" value="0" title="Declinación magnética local, + Este / − Oeste"></div>
+    <button class="btn" id="calib">🎯 Calibrar rumbo (apunta hacia abscisas crecientes y toca)</button>
+    <button class="btn warn" id="camBtn">📷 Cámara de fondo</button>
+  </div>
+  <div id="gpsControls" style="display:none">
+    <button class="btn" id="gps">📍 Seguir con GPS</button>
+    <button class="btn" id="snap">🧲 Pegar al eje: OFF</button>
+    <div class="sub">📌 Ancla — quita el corrimiento del GPS. Párate en un punto conocido del diseño (estaca, PR, abscisa) y toca Anclar.</div>
+    <div class="row"><label>Abscisa</label><input id="ancAbs" class="inp" type="text" inputmode="decimal" placeholder="K0+250 o 250" autocomplete="off"></div>
+    <div class="row"><label>Lateral (m)</label><input id="ancOff" class="inp" type="number" step="0.1" value="0" placeholder="+ Der / − Izq"></div>
+    <button class="btn" id="ancBtn">📌 Anclar aquí (quieto 8 s)</button>
+    <button class="btn" id="ancClr">✕ Quitar ancla</button>
+  </div>
+  <div id="commonControls">
+    <div class="row"><label>Color</label>
+      <select id="colorMode" style="flex:1;background:var(--panel2);color:var(--tx);border:1px solid var(--line);border-radius:8px;padding:7px;font-size:12px">
+        <option value="asfalto">Asfalto + demarcación</option>
+        <option value="peralte">Por peralte</option>
+      </select></div>
+    <div class="row"><label>Opacidad</label><input id="opac" type="range" min="20" max="100" step="5" value="85"><span class="val" id="opacV">85%</span></div>
+    <div class="row"><label>Postes K</label>
+      <select id="postInt" style="flex:1;background:var(--panel2);color:var(--tx);border:1px solid var(--line);border-radius:8px;padding:7px;font-size:12px">
+        <option value="0">Off</option>
+        <option value="20">cada 20 m</option>
+        <option value="50">cada 50 m</option>
+        <option value="100" selected>cada 100 m</option>
+        <option value="500">cada 500 m</option>
+      </select></div>
+    <div class="row"><label>Hitos</label>
+      <label style="flex:1;font-size:12px;display:flex;align-items:center;gap:6px;color:var(--tx)">
+        <input type="checkbox" id="hitosOn" checked style="accent-color:var(--accent)"> PI · PC · PT · obligados
+      </label></div>
+    <button class="btn" id="reset">↺ Reencuadrar</button>
+    <button class="btn" id="reload">📂 Cargar otro JSON</button>
+  </div>
+</div>
+
+<div id="drop">
+  <div class="card">
+    <h1>Visor AR — Vía</h1>
+    <p>Carga el archivo <b>*_AR.json</b> exportado desde RoadExtract Pro (botón/función <code>exportarViaAR</code>). Verás la calzada diseñada a escala real. En <b>Mirar (AR)</b> se superpone sobre el terreno real usando la cámara y el giroscopio.</p>
+    <button class="pick" id="pick">Seleccionar JSON</button>
+    <input id="file" type="file" accept=".json,application/json" style="display:none">
+    <small>Esto es una <b>ayuda de visualización</b>, no un replanteo. GPS de celular: ±3–15 m; con <b>📌 Anclar</b> en una abscisa conocida el corrimiento baja a ~1–3 m mientras no cambien las condiciones. <b>Mapa en vivo</b> es el modo más confiable; <b>AR</b> es orientativo. En iPhone/iPad, GPS y cámara requieren <b>https</b>.</small>
+  </div>
+</div>
+
+<script>
+/* ============ carga de THREE y proj4 (local primero, CDN de respaldo) ============ */
+(function(){
+  function load(urls,cb){var i=0;(function n(){if(i>=urls.length){cb(new Error("no cargó"));return;}
+    var s=document.createElement("script");s.src=urls[i++];s.onload=function(){cb(null)};s.onerror=n;document.head.appendChild(s);})();}
+  window._loadSeq=function(list,done){var i=0;(function nx(){if(i>=list.length){done();return;}
+    load(list[i++],function(){nx();});})();};
+})();
+
+window._loadSeq([
+  ["./lib/three/three.min.js","https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"],
+  ["./lib/proj4/proj4.js","https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.11.0/proj4.js"]
+], function(){
+  if(typeof THREE==="undefined"){
+    document.querySelector("#drop .card p").innerHTML=
+      '<b style="color:#e5603e">No se pudo cargar Three.js.</b> Reintenta con internet, o coloca <code>three.min.js</code> en <code>./lib/three/</code>.';
+    return;
+  }
+  main();
+});
+
+function main(){
+"use strict";
+var $=function(s){return document.querySelector(s)};
+
+/* ---------- escena ---------- */
+var stageEl=$("#stage");
+var scene=new THREE.Scene(); scene.background=new THREE.Color(0x0e1418);
+var camera=new THREE.PerspectiveCamera(65, innerWidth/innerHeight, 0.05, 60000);
+camera.up.set(0,1,0);
+var renderer=new THREE.WebGLRenderer({antialias:true, alpha:true, preserveDrawingBuffer:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.setSize(innerWidth,innerHeight); stageEl.appendChild(renderer.domElement);
+scene.add(new THREE.HemisphereLight(0xbfd3e0,0x25333d,1.15));
+var dl=new THREE.DirectionalLight(0xffffff,.55); dl.position.set(1,2,1); scene.add(dl);
+
+var DATA=null, group=null, meshObj=null, lineC=null, lineL=null, lineR=null;
+var anchor=null, Cw=[], Lw=[], Rw=[], AB=[], PE=null, roadLen=0, laneW=6;
+var Sm=[];   /* [nav2] abscisa por vértice del eje: AB si es válida (misma longitud y creciente); si no, longitud horizontal acumulada */
+function buildSm(){
+  var N=Cw.length; Sm=new Array(N); if(!N) return;
+  var ok=Array.isArray(AB) && AB.length===N && isFinite(+AB[0]);
+  if(ok){ for(var i=1;i<N;i++){ if(!(+AB[i]>=+AB[i-1])){ ok=false; break; } } }
+  if(ok){ for(var j=0;j<N;j++) Sm[j]=+AB[j]; }
+  else{ Sm[0]=(Array.isArray(AB)&&isFinite(+AB[0]))?+AB[0]:0;
+    for(var k=1;k<N;k++) Sm[k]=Sm[k-1]+Math.hypot(Cw[k][0]-Cw[k-1][0],Cw[k][2]-Cw[k-1][2]); }
+}
+/* [nav2] convergencia de cuadrícula: azimut de cuadrícula del norte verdadero en el proyecto */
+function calcConv(d){
+  d._conv=0;
+  try{
+    if(!(d.crs&&d.crs.proj&&window.proj4)) return;
+    var W='+proj=longlat +datum=WGS84 +no_defs';
+    var e=anchor.e, n=anchor.n; if(!isFinite(e)||!isFinite(n)) return;
+    var ll=proj4(d.crs.proj,W,[e,n]), p1=proj4(W,d.crs.proj,[ll[0],ll[1]+0.001]);
+    var c=Math.atan2(p1[0]-e,p1[1]-n); if(isFinite(c)&&Math.abs(c)<0.2) d._conv=c;
+  }catch(err){ d._conv=0; }
+}
+
+/* mundo Y-up:  X=Este,  Y=arriba,  Z=-Norte  (mirar -Z = mirar al Norte) */
+function toWorld(e,n,z){ return [ e-anchor.e, z-anchor.z, -(n-anchor.n) ]; }
+
+/* rampa de color por peralte (azul=- , verde≈0 , rojo=+) */
+function peralteColor(p){
+  var t=Math.max(-1,Math.min(1,p/8)); // ±8%
+  var stops=[[43,108,176],[63,178,127],[224,164,59],[229,96,62]];
+  var u=(t+1)/2*(stops.length-1), i=Math.floor(u), f=u-i;
+  var a=stops[Math.max(0,i)], b=stops[Math.min(stops.length-1,i+1)];
+  return [(a[0]+(b[0]-a[0])*f)/255,(a[1]+(b[1]-a[1])*f)/255,(a[2]+(b[2]-a[2])*f)/255];
+}
+
+/* ---------- construir la cinta de la vía ---------- */
+function build(d, rebuild){
+  DATA=d;
+  if(!d.ribbon||!d.ribbon.C||d.ribbon.C.length<2){ toast("JSON no reconocido (falta ribbon).",4000); return; }
+  anchor=d.anchor||{e:d.ribbon.C[0][0], n:d.ribbon.C[0][1], z:d.ribbon.C[0][2]};
+  laneW=d.lane||6; AB=d.abs||[]; PE=(Array.isArray(d.peralte)&&d.peralte.length===d.ribbon.C.length)?d.peralte:null;
+  if(!d.ribbon.L||!d.ribbon.R||d.ribbon.L.length!==d.ribbon.C.length||d.ribbon.R.length!==d.ribbon.C.length){ toast("JSON inválido: ribbon.L/C/R deben tener la misma cantidad de puntos.",5000); return; }
+  var L=d.ribbon.L, C=d.ribbon.C, R=d.ribbon.R, N=C.length;
+
+  if(group){ scene.remove(group); }
+  group=new THREE.Group(); scene.add(group);
+
+  Lw=[];Cw=[];Rw=[];
+  for(var i=0;i<N;i++){
+    Lw.push(toWorld(L[i][0],L[i][1],L[i][2]));
+    Cw.push(toWorld(C[i][0],C[i][1],C[i][2]));
+    Rw.push(toWorld(R[i][0],R[i][1],R[i][2]));
+  }
+  // longitud
+  roadLen=0; for(var j=1;j<N;j++){var a=Cw[j],b=Cw[j-1];roadLen+=Math.hypot(a[0]-b[0],a[1]-b[1],a[2]-b[2]);}
+  buildSm(); calcConv(d);
+
+  // ---- malla de superficie (2 triángulos por segmento, L-C y C-R) ----
+  var V=[], COL=[], IDX=[];
+  function push(p){ V.push(p[0],p[1],p[2]); return V.length/3-1; }
+  var colMode=$("#colorMode").value;
+  for(var k=0;k<N;k++){
+    var col = (colMode==="peralte" && PE) ? peralteColor(PE[k]) : hex2rgb(0x3a4550);
+    var iL=push(Lw[k]), iC=push(Cw[k]), iR=push(Rw[k]);
+    COL.push(col[0],col[1],col[2], col[0],col[1],col[2], col[0],col[1],col[2]);
+    if(k>0){
+      var pL=(k-1)*3, pC=(k-1)*3+1, pR=(k-1)*3+2, cL=k*3, cC=k*3+1, cR=k*3+2;
+      IDX.push(pL,pC,cL, pC,cC,cL, pC,pR,cC, pR,cR,cC);
+    }
+  }
+  var geo=new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.Float32BufferAttribute(V,3));
+  geo.setAttribute("color", new THREE.Float32BufferAttribute(COL,3));
+  geo.setIndex(IDX); geo.computeVertexNormals();
+  var mat=new THREE.MeshBasicMaterial({vertexColors:true, side:THREE.DoubleSide, transparent:true, opacity:(+$("#opac").value||85)/100, depthWrite:false});
+  meshObj=new THREE.Mesh(geo,mat); group.add(meshObj);
+
+  // ---- demarcación: eje y bordes ----
+  lineC=polyline(Cw, 0xe8d24a, 2);   group.add(lineC);
+  lineL=polyline(Lw, 0xe9edf1, 1.5);  group.add(lineL);
+  lineR=polyline(Rw, 0xe9edf1, 1.5);  group.add(lineR);
+  if(colMode==="peralte"){ lineC.visible=lineL.visible=lineR.visible=false; }
+
+  // piso de referencia (solo aporta en Vista general)
+  var span=Math.max(200, roadLen*0.15);
+  var grid=new THREE.GridHelper(span, Math.min(60,Math.round(span/10)), 0x2b3a47, 0x1b2833);
+  grid.position.set(Cw[0][0], Math.min.apply(null,Cw.map(function(p){return p[1]}))-0.02, Cw[0][2]);
+  group.add(grid);
+
+  buildPosts(+($("#postInt").value||0));
+  buildHitos($("#hitosOn").checked);
+
+  DATA._ok=true;
+  labelK=1;
+  if(rebuild){ if(mode==="map") setLabelScale(Math.max(1,map.h/45)); return; }
+  resetNav();
+  $("#drop").classList.add("hide");
+  $("#gear").classList.remove("hide");
+  $("#hb").classList.add("show");
+  setMode("orbit"); frameAll();
+
+  var geoTxt = (anchor.lat!=null)
+     ? "Georref: "+(+anchor.lat).toFixed(5)+", "+(+anchor.lon).toFixed(5)
+     : "Sin georreferencia (colocación manual)";
+  toast("Vía cargada ✓ "+(d.proyecto||"")+" · "+roadLen.toFixed(0)+" m · calzada "+laneW+" m · "+geoTxt, 5200);
+}
+function hex2rgb(h){ return [((h>>16)&255)/255,((h>>8)&255)/255,(h&255)/255]; }
+function polyline(pts,color,w){
+  var g=new THREE.BufferGeometry(); var arr=new Float32Array(pts.length*3);
+  for(var i=0;i<pts.length;i++){arr[i*3]=pts[i][0];arr[i*3+1]=pts[i][1]+0.02;arr[i*3+2]=pts[i][2];}
+  g.setAttribute("position",new THREE.Float32BufferAttribute(arr,3));
+  return new THREE.Line(g,new THREE.LineBasicMaterial({color:color,linewidth:w,transparent:true,opacity:0.95}));
+}
+
+/* ---------- postes de abscisado (K x+yyy) ---------- */
+var postsGroup=null;
+function fmtAbs(m){ var km=Math.floor(m/1000), r=Math.round(m-km*1000);
+  return "K"+km+"+"+String(r).padStart(3,"0"); }
+function labelSprite(text,border){
+  var fs=44, pad=12, c=document.createElement("canvas"), g=c.getContext("2d");
+  g.font="bold "+fs+"px 'Segoe UI',Arial";
+  var w=Math.ceil(g.measureText(text).width);
+  c.width=w+pad*2; c.height=fs+pad*2;
+  g=c.getContext("2d"); g.font="bold "+fs+"px 'Segoe UI',Arial";
+  var r=12; g.beginPath();
+  g.moveTo(r,0); g.arcTo(c.width,0,c.width,c.height,r); g.arcTo(c.width,c.height,0,c.height,r);
+  g.arcTo(0,c.height,0,0,r); g.arcTo(0,0,c.width,0,r); g.closePath();
+  g.fillStyle="rgba(16,26,33,.88)"; g.fill();
+  var bc = border!=null ? ("#"+("000000"+border.toString(16)).slice(-6)) : "#e8d24a";
+  g.lineWidth=3; g.strokeStyle=bc; g.stroke();
+  g.fillStyle="#f2ead0"; g.textBaseline="middle"; g.fillText(text,pad,c.height/2+2);
+  var tex=new THREE.CanvasTexture(c); tex.minFilter=THREE.LinearFilter; tex.needsUpdate=true;
+  var sp=new THREE.Sprite(new THREE.SpriteMaterial({map:tex,transparent:true,depthTest:false,depthWrite:false}));
+  var s=1.5/c.height; sp.scale.set(c.width*s, c.height*s, 1); sp.userData.base=[c.width*s, c.height*s];
+  return sp;
+}
+function placePost(absVal,i){
+  var ox=Rw[i][0]-Cw[i][0], oz=Rw[i][2]-Cw[i][2], on=Math.hypot(ox,oz)||1; ox/=on; oz/=on;
+  var bx=Rw[i][0]+ox*0.8, by=Rw[i][1], bz=Rw[i][2]+oz*0.8, h=2.2;
+  var g=new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(bx,by,bz),new THREE.Vector3(bx,by+h,bz)]);
+  postsGroup.add(new THREE.Line(g,new THREE.LineBasicMaterial({color:0xf2ead0})));
+  // banderín superior
+  var bg=new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(bx,by+h,bz),new THREE.Vector3(bx+ox*0.5,by+h-0.15,bz+oz*0.5)]);
+  postsGroup.add(new THREE.Line(bg,new THREE.LineBasicMaterial({color:0xe8d24a})));
+  var sp=labelSprite(fmtAbs(absVal)); sp.position.set(bx,by+h+0.75,bz); postsGroup.add(sp);
+}
+function buildPosts(interval){
+  if(postsGroup){ group.remove(postsGroup);
+    postsGroup.traverse(function(o){ if(o.geometry)o.geometry.dispose();
+      if(o.material){ if(o.material.map)o.material.map.dispose(); o.material.dispose(); } });
+    postsGroup=null; }
+  if(!interval || interval<=0 || !Sm.length) return;
+  postsGroup=new THREE.Group();
+  var next=Math.ceil(Sm[0]/interval)*interval, n=0, MAX=2000;
+  for(var i=0;i<Sm.length && n<MAX;i++){
+    while(Sm[i]>=next-1e-6 && n<MAX){ placePost(next,i); next+=interval; n++; }
+  }
+  group.add(postsGroup);
+}
+
+/* ---------- hitos: PI / PC / PT / obligados ---------- */
+var hitosGroup=null;
+var HITO_COL={PI:0xff9f43, PC:0x3fb27f, PT:0xe5603e, OB:0x35c0d6};
+function buildHitos(on){
+  if(hitosGroup){ group.remove(hitosGroup);
+    hitosGroup.traverse(function(o){ if(o.geometry)o.geometry.dispose();
+      if(o.material){ if(o.material.map)o.material.map.dispose(); o.material.dispose(); } });
+    hitosGroup=null; }
+  if(!on || !DATA.hitos || !DATA.hitos.length) return;
+  hitosGroup=new THREE.Group();
+  DATA.hitos.forEach(function(h){
+    var w=toWorld(h.e,h.n,(h.z!=null?h.z:anchor.z));
+    var col=HITO_COL[h.t]||0xffffff, hgt=3.2;
+    var g=new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(w[0],w[1],w[2]),new THREE.Vector3(w[0],w[1]+hgt,w[2])]);
+    hitosGroup.add(new THREE.Line(g,new THREE.LineBasicMaterial({color:col})));
+    var sph=new THREE.Mesh(new THREE.SphereGeometry(0.35,10,8), new THREE.MeshBasicMaterial({color:col}));
+    sph.position.set(w[0],w[1]+hgt,w[2]); hitosGroup.add(sph);
+    var sp=labelSprite(h.label,col); sp.position.set(w[0],w[1]+hgt+0.95,w[2]); hitosGroup.add(sp);
+  });
+  group.add(hitosGroup);
+}
+
+/* =====================================================================
+   [nav2] NAVEGACIÓN ROBUSTA
+   - Abscisa continua con ventana de seguimiento (no salta entre ramas de un zig-zag)
+   - Brújula absoluta (Android: deviceorientationabsolute · iOS: webkitCompassHeading)
+     fusionada con el giroscopio (suave y sin deriva)
+   - Corrección del signo del rumbo (antes la calibración duplicaba el error)
+   - Ancla GPS en abscisa conocida (quita el sesgo del GPS del celular)
+   - Auto-rumbo por GPS con rechazo de inversiones
+   - Modo "Mapa en vivo" (tipo ubicación en tiempo real: la vía fija, tú te mueves)
+   ===================================================================== */
+var d2r=Math.PI/180;
+function normAng(a){ while(a>Math.PI)a-=2*Math.PI; while(a<-Math.PI)a+=2*Math.PI; return a; }
+
+/* punto del eje más cercano a (x,z) mundo → índice (búsqueda global; solo para cotas) */
+function nearestIdx(x,z){
+  var best=0,bd=Infinity;
+  for(var i=0;i<Cw.length;i++){var dx=Cw[i][0]-x,dz=Cw[i][2]-z,dd=dx*dx+dz*dz;if(dd<bd){bd=dd;best=i;}}
+  return best;
+}
+/* rumbo (azimut de cuadrícula, 0=Norte, horario) del eje en el índice i */
+function ejeAz(i){
+  if(Cw.length<2) return 0;
+  var a=Cw[Math.max(0,i-1)], b=Cw[Math.min(Cw.length-1,i+1)];
+  var dx=b[0]-a[0], dz=b[2]-a[2];           // world: +X Este, +Z Sur
+  return Math.atan2(dx,-dz);                 // -Z = Norte
+}
+
+/* ---------- abscisa continua ---------- */
+function fmtAbs1(m){
+  if(!isFinite(m)) return "—";
+  var s=m<0?"-":""; m=Math.abs(Math.round(m*10)/10);
+  var km=Math.floor(m/1000), r=m-km*1000;
+  return s+"K"+km+"+"+r.toFixed(1).padStart(5,"0");
+}
+function parseAbs(s){
+  s=String(s||"").trim().toUpperCase().replace(/\s/g,"");
+  var m=s.match(/^K?(\d+)\+(\d+(?:[.,]\d+)?)$/);
+  if(m) return (+m[1])*1000+parseFloat(m[2].replace(",","."));
+  var v=parseFloat(s.replace(",","."));
+  return isFinite(v)?v:null;
+}
+/* proyección de (x,z) sobre el segmento (i-1 → i) */
+function segProj(i,x,z){
+  var ax=Cw[i-1][0], az=Cw[i-1][2], dx=Cw[i][0]-ax, dz=Cw[i][2]-az, L2=dx*dx+dz*dz;
+  var t=L2>0?((x-ax)*dx+(z-az)*dz)/L2:0; if(t<0)t=0; else if(t>1)t=1;
+  var qx=ax+dx*t, qz=az+dz*t, vx=x-qx, vz=z-qz, L=Math.sqrt(L2)||1;
+  return {i:i, t:t, px:qx, pz:qz, d2:vx*vx+vz*vz, side:(vx*(-dz)+vz*dx)/L};  // side>0 = derecha
+}
+function projRange(x,z,a0,a1){
+  var best=null;
+  for(var i=1;i<Cw.length;i++){
+    if(a0!=null && (Sm[i]<a0 || Sm[i-1]>a1)) continue;
+    var s=segProj(i,x,z); if(!best||s.d2<best.d2) best=s;
+  }
+  return best;
+}
+function projFinish(b){
+  var i=b.i;
+  return {px:b.px, pz:b.pz, py:Cw[i-1][1]+(Cw[i][1]-Cw[i-1][1])*b.t,
+          idx:(b.t<0.5?i-1:i), abs:Sm[i-1]+(Sm[i]-Sm[i-1])*b.t, dist:Math.sqrt(b.d2), off:b.side};
+}
+function newTrk(){ return {idx:-1, lost:0}; }
+/* seguimiento con continuidad: busca solo cerca de la abscisa anterior;
+   salta a otra rama solo si 3 lecturas seguidas lo confirman */
+function trackProject(x,z,trk,acc){
+  if(Cw.length<2) return {px:x,pz:z,py:(Cw[0]?Cw[0][1]:0),idx:0,abs:Sm[0]||0,dist:0,off:0};
+  var g=projRange(x,z,null,null), res=g;
+  if(trk.idx>=0 && trk.idx<Cw.length){
+    var a=Sm[trk.idx], W=Math.min(150, 35+2*(acc||0));
+    var loc=projRange(x,z,a-W,a+W);
+    if(loc){
+      var dl=Math.sqrt(loc.d2), dg=Math.sqrt(g.d2);
+      if(loc.i!==g.i && dl-dg>Math.max(8,1.5*(acc||0))){
+        trk.lost++;
+        if(trk.lost>=3){ res=g; trk.lost=0; } else res=loc;
+      } else { trk.lost=0; res=loc; }
+    }
+  }
+  var r=projFinish(res); trk.idx=r.idx; return r;
+}
+/* punto del diseño en una abscisa + desplazamiento lateral (+ derecha) */
+function pointAtAbs(a,off){
+  var N=Cw.length; if(N<2||!isFinite(a)) return null;
+  if(a<Sm[0]-0.01 || a>Sm[N-1]+0.01) return null;
+  var lo=1, hi=N-1; while(lo<hi){ var m=(lo+hi)>>1; if(Sm[m]<a) lo=m+1; else hi=m; }
+  var i=lo, s0=Sm[i-1], s1=Sm[i], t=s1>s0?(a-s0)/(s1-s0):0; t=Math.max(0,Math.min(1,t));
+  var ax=Cw[i-1][0], az=Cw[i-1][2], dx=Cw[i][0]-ax, dz=Cw[i][2]-az, L=Math.hypot(dx,dz)||1;
+  off=off||0;
+  return {x:ax+dx*t+(-dz/L)*off, z:az+dz*t+(dx/L)*off, idx:(t<0.5?i-1:i)};
+}
+
+/* ---------- encuadre ---------- */
+var midY=0;
+function frameAll(){
+  var xs=Cw.map(p=>p[0]), ys=Cw.map(p=>p[1]), zs=Cw.map(p=>p[2]);
+  var cx=(Math.min.apply(null,xs)+Math.max.apply(null,xs))/2;
+  var cz=(Math.min.apply(null,zs)+Math.max.apply(null,zs))/2;
+  midY=(Math.min.apply(null,ys)+Math.max.apply(null,ys))/2;
+  var d=Math.max(roadLen*0.55, 40);
+  orbit.target.set(cx,midY,cz); orbit.radius=d; orbit.theta=0.6; orbit.phi=0.9; orbit.apply();
+}
+
+/* ============ controles: órbita + mapa + recorrer + AR ============ */
+var mode="orbit";
+var orbit={target:new THREE.Vector3(0,0,0), radius:60, theta:0.6, phi:0.9,
+  apply:function(){ var s=Math.sin(this.phi); camera.up.set(0,1,0); camera.position.set(
+    this.target.x+this.radius*s*Math.sin(this.theta),
+    this.target.y+this.radius*Math.cos(this.phi),
+    this.target.z+this.radius*s*Math.cos(this.theta)); camera.lookAt(this.target);} };
+var walk={pos:new THREE.Vector3(0,1.6,0), yaw:0, pitch:0,
+  apply:function(){ camera.position.copy(this.pos);
+    var q=new THREE.Euler(this.pitch,this.yaw,0,"YXZ"); camera.quaternion.setFromEuler(q);} };
+var ar={eye:1.6, yawOff:0, yawFine:0, calib:0, pitchOff:0, alpha:0,beta:0,gamma:0,orient:0,
+        active:false, listening:false, px:0,pz:0,py:0, idx:0, abs:0, off:0, dist:null};
+var map={cx:0, cz:0, h:200, follow:true, panAcc:0};
+var obsTrk=newTrk(), walkTrk=newTrk(), obsKey=null;
+
+/* ---- puntero (drag / pinch) ---- */
+var ptrs={}, lastDist=null;
+function down(e){ ptrs[e.pointerId]={x:e.clientX,y:e.clientY}; map.panAcc=0; }
+function up(e){ delete ptrs[e.pointerId]; lastDist=null; }
+function move(e){
+  var p=ptrs[e.pointerId]; if(!p) return;
+  var dx=e.clientX-p.x, dy=e.clientY-p.y; p.x=e.clientX; p.y=e.clientY;
+  var ids=Object.keys(ptrs);
+  if(ids.length>=2){
+    var a=ptrs[ids[0]], b=ptrs[ids[1]], dist=Math.hypot(a.x-b.x,a.y-b.y);
+    if(lastDist!=null){ var dd=dist-lastDist;
+      if(mode==="orbit"){ orbit.radius=Math.max(3,orbit.radius-dd*0.15); orbit.apply(); }
+      else if(mode==="walk"){ var fwd=new THREE.Vector3(0,0,-1).applyQuaternion(camera.quaternion); walk.pos.addScaledVector(fwd, dd*0.15); walk.apply(); }
+      else if(mode==="map"){ map.h=Math.max(20,Math.min(20000,map.h*(1-dd*0.004))); }
+    }
+    lastDist=dist; return;
+  }
+  if(mode==="orbit"){ orbit.theta-=dx*0.006; orbit.phi=Math.max(0.05,Math.min(1.55,orbit.phi-dy*0.006)); orbit.apply(); }
+  else if(mode==="walk"){ walk.yaw-=dx*0.005; walk.pitch=Math.max(-1.4,Math.min(1.4,walk.pitch-dy*0.005)); walk.apply(); }
+  else if(mode==="map"){
+    map.panAcc+=Math.abs(dx)+Math.abs(dy);
+    if(map.follow && map.panAcc<12) return;           // evita soltar el seguimiento por un toque
+    var mpp=2*map.h*Math.tan(camera.fov*Math.PI/360)/innerHeight;
+    map.cx-=dx*mpp; map.cz-=dy*mpp;
+    if(map.follow){ map.follow=false; $("#centerBtn").classList.remove("hide"); }
+  }
+  else if(mode==="ar" && !ar.active){ ar.yawOff-=dx*0.006; ar.pitchOff=Math.max(-1.3,Math.min(1.3,ar.pitchOff-dy*0.006)); }
+}
+renderer.domElement.addEventListener("pointerdown",down);
+renderer.domElement.addEventListener("pointermove",move);
+addEventListener("pointerup",up); addEventListener("pointercancel",up);
+renderer.domElement.addEventListener("wheel",function(e){
+  if(mode==="orbit"){ orbit.radius=Math.max(3,orbit.radius+e.deltaY*0.05); orbit.apply(); }
+  else if(mode==="walk"){ var fwd=new THREE.Vector3(0,0,-1).applyQuaternion(camera.quaternion); walk.pos.addScaledVector(fwd,-e.deltaY*0.05); walk.apply(); }
+  else if(mode==="map"){ map.h=Math.max(20,Math.min(20000,map.h*(1+e.deltaY*0.001))); }
+},{passive:true});
+
+/* ---- teclado (recorrer en PC) ---- */
+var keys={};
+addEventListener("keydown",function(e){ if(e.target&&(e.target.tagName==="INPUT"||e.target.tagName==="SELECT")) return; keys[(e.key||"").toLowerCase()]=1; });
+addEventListener("keyup",function(e){ keys[(e.key||"").toLowerCase()]=0; });
+addEventListener("blur",function(){ keys={}; });
+function walkStep(){
+  if(mode!=="walk") return;
+  var sp=0.4, f=new THREE.Vector3(0,0,-1).applyQuaternion(camera.quaternion);
+  var r=new THREE.Vector3(1,0,0).applyQuaternion(camera.quaternion); f.y=0;r.y=0;f.normalize();r.normalize();
+  if(keys["w"])walk.pos.addScaledVector(f,sp); if(keys["s"])walk.pos.addScaledVector(f,-sp);
+  if(keys["a"])walk.pos.addScaledVector(r,-sp); if(keys["d"])walk.pos.addScaledVector(r,sp);
+  if(keys["w"]||keys["s"]||keys["a"]||keys["d"]) walk.apply();
+}
+
+/* ---- sensores de orientación ---- */
+var zee=new THREE.Vector3(0,0,1), q1=new THREE.Quaternion(-Math.sqrt(0.5),0,0,Math.sqrt(0.5)), q0=new THREE.Quaternion();
+var Yaxis=new THREE.Vector3(0,1,0), _tq=new THREE.Quaternion(), _tqA=new THREE.Quaternion(), _tqY=new THREE.Quaternion();
+var _vf=new THREE.Vector3(), _vu=new THREE.Vector3();
+function quatFrom(al,be,ga,or,out){
+  out.setFromEuler(new THREE.Euler((be||0)*d2r,(al||0)*d2r,-(ga||0)*d2r,"YXZ"));
+  out.multiply(q1); out.multiply(q0.setFromAxisAngle(zee,-(or||0)*d2r)); return out;
+}
+function gyroQuat(out){ return quatFrom(ar.alpha,ar.beta,ar.gamma,ar.orient,out); }
+/* rumbo (horario desde -Z) de hacia dónde apunta el equipo: cámara si está vertical, borde superior si está plano */
+function headingOfQuat(q){
+  var f=_vf.set(0,0,-1).applyQuaternion(q);
+  if(Math.abs(f.y)<0.7) return Math.atan2(f.x,-f.z);
+  var u=_vu.set(0,1,0).applyQuaternion(q);
+  return f.y<0 ? Math.atan2(u.x,-u.z) : Math.atan2(-u.x,u.z);
+}
+function screenAngle(){ return (screen.orientation&&typeof screen.orientation.angle==="number")?screen.orientation.angle:(window.orientation||0); }
+
+/* fuente de rumbo + declinación (persistentes) */
+function lsGet(k,def){ try{ var v=localStorage.getItem(k); return v==null?def:v; }catch(e){ return def; } }
+function lsSet(k,v){ try{ localStorage.setItem(k,v); }catch(e){} }
+var hdgSrc=lsGet("viaAR_hdgSrc","compass"); if(["compass","gps","manual"].indexOf(hdgSrc)<0) hdgSrc="compass";
+var declDeg=parseFloat(lsGet("viaAR_decl","0")); if(!isFinite(declDeg)) declDeg=0;
+$("#hdgSrc").value=hdgSrc; $("#decl").value=declDeg;
+
+/* fusión brújula + giroscopio: el giroscopio da suavidad, la brújula quita la deriva */
+var comp={ema:null, rej:0, last:0, hasAbsEvt:false};
+function compassRecent(){ return comp.last>0 && performance.now()-comp.last<2500; }
+function compassFuse(hNorth){
+  if(!ar.active || !isFinite(hNorth)) return;
+  var hRel=headingOfQuat(gyroQuat(_tq));
+  var conv=(DATA&&DATA._conv)||0;
+  var want=normAng(hNorth + declDeg*d2r + conv - hRel);
+  comp.last=performance.now();
+  if(comp.ema==null){ comp.ema=want; comp.rej=0; }
+  else{
+    var df=normAng(want-comp.ema);
+    if(Math.abs(df)>0.8){ if(++comp.rej<90) return; comp.ema=want; comp.rej=0; }   // interferencia magnética breve → se ignora
+    else { comp.rej=0; comp.ema=normAng(comp.ema+df*0.04); }
+  }
+  if(hdgSrc==="compass") ar.yawOff=comp.ema;
+}
+function onOrient(e){
+  if(e.alpha==null) return;
+  ar.alpha=e.alpha; ar.beta=e.beta||0; ar.gamma=e.gamma||0; ar.orient=screenAngle();
+  if(!ar.active){ ar.active=true; }
+  if(typeof e.webkitCompassHeading==="number" && isFinite(e.webkitCompassHeading) && !(e.webkitCompassAccuracy<0)){
+    var fy=_vf.set(0,0,-1).applyQuaternion(gyroQuat(_tq)).y;          // iOS: evitar la zona ambigua (~35°-58°)
+    if(Math.abs(fy)<0.55 || Math.abs(fy)>0.85) compassFuse(e.webkitCompassHeading*d2r);
+  } else if(e.absolute===true && !comp.hasAbsEvt){
+    compassFuse(headingOfQuat(gyroQuat(_tqA)));
+  }
+}
+function onAbs(e){
+  if(e.alpha==null) return;
+  comp.hasAbsEvt=true;
+  quatFrom(e.alpha,e.beta,e.gamma,screenAngle(),_tqA);
+  compassFuse(headingOfQuat(_tqA));
+}
+var compCheckT=null;
+function startGyro(quiet){
+  if(ar.listening) return;
+  function attach(){
+    addEventListener("deviceorientation",onOrient,true);
+    if("ondeviceorientationabsolute" in window) addEventListener("deviceorientationabsolute",onAbs,true);
+    ar.listening=true;
+    if(!quiet) toast("Gira el equipo para mirar. Rumbo: "+srcName()+". Si la vía queda girada, 🎯 Calibrar.",5000);
+    clearTimeout(compCheckT);
+    compCheckT=setTimeout(function(){
+      if(mode!=="ar" || !ar.active || hdgSrc!=="compass" || compassRecent()) return;
+      hdgSrc="manual"; $("#hdgSrc").value="manual"; lsSet("viaAR_hdgSrc","manual"); ar.calib=0;
+      toast("Este equipo no entrega brújula. Rumbo pasado a Manual: apunta a lo largo de la vía y toca 🎯 Calibrar.",6000);
+    },3500);
+  }
+  if(typeof DeviceOrientationEvent!=="undefined" && typeof DeviceOrientationEvent.requestPermission==="function"){
+    DeviceOrientationEvent.requestPermission().then(function(s){ if(s==="granted") attach(); else if(!quiet) toast("Permiso de sensores denegado — arrastra para mirar.",4000); })
+      .catch(function(){ if(!quiet) toast("Sensores no disponibles (¿https?) — arrastra para mirar.",4000); });
+  } else if(window.DeviceOrientationEvent){ attach(); }
+  else if(!quiet){ toast("Este equipo no expone giroscopio — arrastra para mirar.",4000); }
+}
+function stopGyro(){
+  removeEventListener("deviceorientation",onOrient,true);
+  removeEventListener("deviceorientationabsolute",onAbs,true);
+  clearTimeout(compCheckT);
+  ar.active=false; ar.listening=false;
+}
+function srcName(){ return hdgSrc==="compass"?"Brújula":hdgSrc==="gps"?"GPS al caminar":"Manual"; }
+
+/* ---- observador ---- */
+function yawEff(){ return ar.yawOff + ar.calib + ar.yawFine; }   // azimut de cuadrícula que se suma al rumbo del equipo
+function obsApply(r){ ar.idx=r.idx; ar.abs=r.abs; ar.off=r.off; ar.dist=r.dist; ar.py=r.py; }
+function obsUpdate(){
+  if(Cw.length<2) return;
+  var k=ar.px.toFixed(3)+","+ar.pz.toFixed(3); if(k===obsKey) return; obsKey=k;
+  obsApply(trackProject(ar.px,ar.pz,obsTrk,gpsWatch!=null?gpsLastAcc:0));
+}
+function arApply(){
+  obsUpdate();
+  camera.position.set(ar.px, ar.py+ar.eye, ar.pz);
+  var ye=yawEff();
+  if(ar.active){
+    gyroQuat(_tq);
+    // [nav2] signo corregido: rotar -ye alrededor de Y suma +ye al azimut horario
+    camera.quaternion.copy(_tqY.setFromAxisAngle(Yaxis,-ye)).multiply(_tq);
+  } else {
+    var cel=Math.cos(ar.pitchOff), sel=Math.sin(ar.pitchOff);
+    var look=new THREE.Vector3(Math.sin(ye)*cel, sel, -Math.cos(ye)*cel);
+    camera.up.set(0,1,0); camera.lookAt(camera.position.clone().add(look));
+  }
+}
+
+/* ---------- HUD ---------- */
+var hudCache={};
+function setTxt(id,t,col){ var el=document.getElementById(id); if(!el) return;
+  if(hudCache[id]!==t){ el.textContent=t; hudCache[id]=t; }
+  if(col!==undefined && el.style.color!==col) el.style.color=col; }
+function hudUpdate(o){
+  o=o||ar;
+  var hasPos=(mode==="walk") || (mode==="ar") || (mode==="map" && gpsFix);
+  setTxt("hbAbs", (hasPos&&Sm.length)?fmtAbs1(o.abs):"—");
+  setTxt("hbLat", (hasPos&&o.dist!=null)?(o.dist<0.3?"sobre el eje":(o.dist.toFixed(1)+" m "+(o.off>=0?"Der":"Izq"))):"—");
+  setTxt("hbAz", Cw.length?(((ejeAz(o.idx)/d2r)+360)%360).toFixed(0)+"°":"—");
+  var hs;
+  if(hdgSrc==="compass") hs=compassRecent()?"Brújula ✓":(ar.active?"Brújula: sin señal":"Brújula");
+  else if(hdgSrc==="gps") hs=gh.ema!=null?"GPS ✓":"GPS: camina…";
+  else hs="Manual";
+  setTxt("hbHdg", hs, (hdgSrc==="compass"&&ar.active&&!compassRecent())||(hdgSrc==="gps"&&gh.ema==null)?"#e0a43b":"");
+  if(gpsCorr.on){
+    var mins=Math.floor((Date.now()-gpsCorr.t)/60000), mag=Math.hypot(gpsCorr.dx,gpsCorr.dz);
+    setTxt("hbAnc", mag.toFixed(1)+" m · "+mins+" min", mins>=30?"#e0a43b":"#3fb27f");
+  } else setTxt("hbAnc","—","");
+}
+
+/* colocar observador en un índice del eje, desplazado 'off' m a la derecha, mirando al eje */
+function paradoEn(i, off){
+  off=off==null?8:off;
+  i=Math.max(0,Math.min(Cw.length-1,i));
+  var az=ejeAz(i);
+  var dxr=Math.cos(az), dzr=Math.sin(az);     // derecha del eje (world)
+  ar.px=Cw[i][0]+dxr*off; ar.py=Cw[i][1]; ar.pz=Cw[i][2]+dzr*off;
+  obsTrk=newTrk(); obsTrk.idx=i; obsKey=null; ar.idx=i;
+  ar.yawOff=Math.atan2(Cw[i][0]-ar.px, -(Cw[i][2]-ar.pz));   // [nav2] mirar hacia el eje (antes quedaba mirando al Oeste)
+  ar.pitchOff=0;
+}
+
+/* ---------- calibración de rumbo ---------- */
+$("#calib").onclick=function(){
+  if(!Cw.length) return;
+  obsUpdate();
+  var want=ejeAz(ar.idx);                 // sentido de abscisas crecientes
+  ar.yawFine=0; $("#yawFine").value=0; $("#yawFineV").textContent="0°";
+  if(!ar.active){ ar.calib=0; ar.yawOff=want; }
+  else{
+    var cur=headingOfQuat(gyroQuat(_tq));
+    if(hdgSrc==="compass"){
+      if(comp.ema!=null) ar.yawOff=comp.ema;
+      ar.calib=normAng(want-(cur+ar.yawOff));
+      if(Math.abs(ar.calib)>25*d2r){ toast("Calibrado ✓ — corrección "+(ar.calib/d2r).toFixed(0)+"°: alta, puede haber interferencia magnética (vehículo, varillas, líneas).",5500); return; }
+    } else {
+      ar.calib=0; ar.yawOff=normAng(want-cur);
+      if(hdgSrc==="gps"){ gh.ema=ar.yawOff; gh.rej=0; }
+    }
+  }
+  toast("Rumbo calibrado ✓ (alineado al eje, sentido de abscisas crecientes)",2600);
+};
+$("#hdgSrc").onchange=function(){
+  hdgSrc=this.value; lsSet("viaAR_hdgSrc",hdgSrc); ar.calib=0; ghReset();
+  if(hdgSrc==="compass" && comp.ema!=null) ar.yawOff=comp.ema;
+  toast(hdgSrc==="compass"?"Rumbo por brújula (automático). Si queda girado, 🎯 Calibrar una vez."
+       :hdgSrc==="gps"?"Rumbo por GPS: camina derecho mirando al frente ~10 m. No sirve estando quieto."
+       :"Rumbo manual: apunta a lo largo de la vía y toca 🎯 Calibrar.",4500);
+};
+$("#decl").onchange=function(){
+  var v=parseFloat(String(this.value).replace(",","."));
+  if(!isFinite(v)||Math.abs(v)>30){ v=0; this.value=0; }
+  declDeg=v; lsSet("viaAR_decl",String(v)); comp.ema=null; ar.calib=0;
+  toast("Declinación "+v.toFixed(1)+"° aplicada.",2200);
+};
+
+/* ---------- GPS: seguimiento continuo ---------- */
+var gpsOffN=0, gpsWatch=null, gpsEMA=null, gpsLastAcc=null, gpsFix=false, snapAxis=false, lastBadAccToast=0, gpsJumpN=0;
+var gpsCorr={dx:0,dz:0,on:false,t:0};
+var anc=null;
+var gh={anchor:null, ema:null, pend:null, pendN:0, rej:0};
+function ghReset(){ gh={anchor:null, ema:null, pend:null, pendN:0, rej:0}; }
+function gpsColor(acc){ return acc<=5?"#3fb27f":acc<=12?"#e0a43b":"#e5603e"; }
+
+/* posición del observador a partir del GPS filtrado + corrección del ancla */
+function applyGpsPos(){
+  if(!gpsEMA) return;
+  var x=gpsEMA.x+(gpsCorr.on?gpsCorr.dx:0), z=gpsEMA.z+(gpsCorr.on?gpsCorr.dz:0);
+  var r=trackProject(x,z,obsTrk,gpsLastAcc||0);
+  if(snapAxis){ ar.px=r.px; ar.pz=r.pz; } else { ar.px=x; ar.pz=z; }
+  obsApply(r); obsKey=ar.px.toFixed(3)+","+ar.pz.toFixed(3);
+  if(!gpsFix){ gpsFix=true; if(mode==="map" && map.follow) map.h=Math.min(map.h,250); }
+  return {x:x,z:z};
+}
+function gpsUpdate(pos){
+  if(!DATA||!DATA._ok) return;
+  var lat=pos.coords.latitude, lon=pos.coords.longitude, acc=pos.coords.accuracy||99;
+  if(!(DATA.crs && DATA.crs.proj && window.proj4)){
+    toast("El JSON no trae CRS/proj — no se puede ubicar por GPS. Usa 'Recorrer' manual.",5200); stopGps(); return;
+  }
+  var en; try{ en=proj4('+proj=longlat +datum=WGS84 +no_defs', DATA.crs.proj, [lon,lat]); }
+  catch(err){ toast("No se pudo proyectar el GPS al CRS del proyecto.",4200); stopGps(); return; }
+  var w=toWorld(en[0],en[1],anchor.z);
+  if(!isFinite(w[0])||!isFinite(w[2])) return;
+  gpsLastAcc=acc;
+  setTxt("hbGps","±"+acc.toFixed(0)+" m",gpsColor(acc));
+  if(anc) anc.samples.push({x:w[0],z:w[2],acc:acc});
+  if(acc>60){
+    if(Date.now()-lastBadAccToast>10000){ lastBadAccToast=Date.now(); toast("GPS muy impreciso (±"+acc.toFixed(0)+" m): no se mueve la posición. Busca cielo abierto.",4000); }
+    return;
+  }
+  // suavizado: mejor precisión → sigue más rápido; peor → más filtrado; en movimiento → menos retardo
+  var a=acc<=5?0.55:acc<=12?0.30:0.15, spd=pos.coords.speed;
+  if(spd!=null && spd>=2) a=Math.max(a,0.75); else if(spd!=null && spd>=0.8) a=Math.max(a,0.5);
+  if(!gpsEMA){ gpsEMA={x:w[0],z:w[2]}; gpsJumpN=0; } else {
+    var dx=w[0]-gpsEMA.x, dz=w[2]-gpsEMA.z, d=Math.hypot(dx,dz);
+    var cap=Math.max(acc*2,12,(spd!=null&&spd>0?spd*3:0));
+    if(d>cap){                                  // salto: se ignora salvo que 3 lecturas seguidas lo confirmen
+      if(++gpsJumpN<3) return;
+      gpsEMA={x:w[0],z:w[2]}; gpsJumpN=0;
+    } else { gpsJumpN=0; gpsEMA.x+=dx*a; gpsEMA.z+=dz*a; }
+  }
+  var p=applyGpsPos();
+  if(hdgSrc==="gps" && ar.active && p) gpsHeading(pos,p.x,p.z,acc);
+}
+/* auto-rumbo por GPS con rechazo de inversiones */
+function gpsHeading(pos,x,z,acc){
+  var sp=pos.coords.speed, hd=pos.coords.heading, conv=(DATA&&DATA._conv)||0, hT=null;
+  if(sp!=null && !(sp>=0)) sp=null;                       // iOS entrega -1 si no es válido
+  if(sp!=null && sp<0.3) return;                          // quieto: no hay rumbo de marcha
+  if(sp!=null && sp>=0.8 && hd!=null && isFinite(hd) && hd>=0){ hT=hd*d2r+conv; gh.anchor={x:x,z:z}; }
+  else{
+    if(!gh.anchor){ gh.anchor={x:x,z:z}; return; }
+    var mx=x-gh.anchor.x, mz=z-gh.anchor.z, d=Math.hypot(mx,mz);
+    if(d<Math.max(6,1.2*acc)) return;                     // desplazamiento menor que el ruido → no confiable
+    hT=Math.atan2(mx,-mz); gh.anchor={x:x,z:z};
+  }
+  var want=normAng(hT-headingOfQuat(gyroQuat(_tq)));
+  if(gh.ema==null){
+    if(gh.pend!=null && Math.abs(normAng(want-gh.pend))<0.52){ gh.pendN++; gh.pend=normAng(gh.pend+normAng(want-gh.pend)*0.5); }
+    else { gh.pend=want; gh.pendN=1; }
+    if(gh.pendN>=2){ gh.ema=gh.pend; gh.rej=0; toast("Rumbo por GPS fijado ✓",2200); }
+  } else {
+    var df=normAng(want-gh.ema);
+    if(Math.abs(df)>1.05){ if(++gh.rej>=4){ gh.ema=want; gh.rej=0; } }   // salto >60°: se exige confirmación (evita la vía invertida)
+    else { gh.rej=0; gh.ema=normAng(gh.ema+df*0.25); }
+  }
+  if(gh.ema!=null) ar.yawOff=gh.ema;
+}
+/* [gpsperm] diagnóstico y ayuda de permisos de ubicación */
+var UA=navigator.userAgent||"", isIOS=/iPhone|iPad|iPod/i.test(UA)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);
+var inApp=/FBAN|FBAV|Instagram|WhatsApp|Line\/|; wv\)|GSA\//i.test(UA);
+function gpsHelp(kind){
+  var h="", t="📍 Activa la ubicación";
+  if(kind==="insecure"){
+    t="🔒 La página no está en https";
+    h="<p>El navegador solo entrega GPS en páginas seguras. Abre el visor con la dirección que empieza por <b>https://</b> (la de Netlify).</p>";
+  } else if(kind==="inapp"){
+    t="🌐 Ábrelo en el navegador";
+    h="<p>Estás dentro de otra app (WhatsApp, Facebook…) y esa ventana <b>no da GPS</b>.</p><ol><li>Toca el menú <b>⋮</b> de arriba.</li><li>Elige <b>Abrir en Chrome</b> (o <b>Abrir en Safari</b>).</li></ol>";
+  } else if(kind==="off"){
+    t="📡 La ubicación del teléfono está apagada";
+    h=isIOS?"<ol><li><b>Ajustes → Privacidad y seguridad → Localización</b> → activar.</li><li>En esa lista, <b>Safari (Sitios web Safari)</b> → <b>Al usar la app</b> y <b>Ubicación exacta</b> activada.</li></ol>"
+           :"<ol><li>Baja la barra de notificaciones y activa <b>Ubicación</b>.</li><li>Si pregunta, activa <b>Precisión de ubicación de Google</b> (mejor señal).</li></ol>";
+  } else {   // denied
+    t="🚫 El navegador tiene bloqueado el GPS para esta página";
+    h=(isIOS
+      ? "<p><b>iPhone / iPad (Safari):</b></p><ol><li>Toca <b>aA</b> en la barra de dirección → <b>Configuración del sitio web</b> → <b>Ubicación: Permitir</b>.</li><li>Si no aparece: <b>Ajustes → Privacidad y seguridad → Localización → Sitios web Safari → Al usar la app</b>, con <b>Ubicación exacta</b> activada.</li><li>Recarga la página.</li></ol>"
+      : "<p><b>Android (Chrome):</b></p><ol><li>Toca el ícono <b>⚙︎/candado</b> a la izquierda de la dirección.</li><li><b>Permisos</b> (o Configuración del sitio) → <b>Ubicación → Permitir</b>. Si ves <b>Restablecer permisos</b>, tócalo.</li><li>Si sigue igual: <b>Ajustes del teléfono → Apps → Chrome → Permisos → Ubicación → Permitir solo mientras se usa</b>, con <b>Usar ubicación precisa</b> activado.</li><li>Recarga la página.</li></ol>")
+      +"<p class='tag'>Una vez bloqueado, la página ya no puede volver a preguntar: hay que permitirlo a mano en los ajustes.</p>";
+  }
+  $("#gpsHelpT").textContent=t; $("#gpsHelpB").innerHTML=h; $("#gpsHelp").classList.remove("hide");
+}
+$("#gpsHelpClose").onclick=function(){ $("#gpsHelp").classList.add("hide"); };
+$("#gpsHelpRetry").onclick=function(){ $("#gpsHelp").classList.add("hide"); stopGps(); startGps(); };
+function startGps(){
+  if(!navigator.geolocation){ toast("Este navegador no expone GPS. Usa Chrome (Android) o Safari (iPhone).",5000); return; }
+  if(gpsWatch!=null) return;
+  if(!window.isSecureContext){ gpsHelp("insecure"); return; }
+  if(inApp){ gpsHelp("inapp"); }                      // se intenta igual; si falla, ya quedó explicado
+  if(navigator.permissions && navigator.permissions.query){
+    navigator.permissions.query({name:"geolocation"}).then(function(st){
+      if(st.state==="denied"){ stopGps(); gpsHelp("denied"); }
+    }).catch(function(){});
+  }
+  gpsEMA=null; gpsFix=false; gh.anchor=null; gpsOffN=0;
+  toast("Siguiendo GPS… Para quitar el corrimiento: párate en una abscisa conocida y usa 📌 Anclar.",5200);
+  gpsWatch=navigator.geolocation.watchPosition(gpsUpdate,
+    function(err){
+      if(err && err.code===1){ stopGps(); gpsHelp(inApp?"inapp":"denied"); return; }
+      if(err && err.code===2 && !gpsFix){ gpsOffN=(gpsOffN||0)+1; if(gpsOffN===2) gpsHelp("off"); }
+      setTxt("hbGps", gpsFix?"sin lectura…":"buscando…", "#e0a43b");            // timeout: sigue intentando, sin ruido
+    },
+    {enableHighAccuracy:true, maximumAge:1000, timeout:15000});
+  $("#gps").textContent="⏸ Detener seguimiento"; $("#gps").classList.add("warn");
+}
+function stopGps(){
+  if(gpsWatch!=null){ navigator.geolocation.clearWatch(gpsWatch); gpsWatch=null; }
+  cancelAnchor();
+  gpsFix=false; gpsEMA=null;
+  $("#gps").textContent="📍 Seguir con GPS"; $("#gps").classList.remove("warn");
+  setTxt("hbGps","—","");
+}
+$("#gps").onclick=function(){ if(gpsWatch==null) startGps(); else stopGps(); };
+$("#snap").onclick=function(){
+  snapAxis=!snapAxis;
+  this.textContent="🧲 Pegar al eje: "+(snapAxis?"ON":"OFF");
+  this.classList.toggle("warn",snapAxis);
+  applyGpsPos();
+  toast(snapAxis?"Pegado al eje ON: la posición se proyecta sobre el eje (la abscisa sigue siendo continua)."
+                :"Pegado al eje OFF: posición GPS (corregida por el ancla si existe).",4200);
+};
+
+/* ---------- ancla: quitar el sesgo del GPS en un punto conocido ---------- */
+var ANC_MS=8000, ancTick=null;
+function cancelAnchor(){
+  if(anc){ clearTimeout(anc.timer); anc=null; }
+  clearInterval(ancTick); ancTick=null;
+  var b=$("#ancBtn"); b.disabled=false; b.textContent="📌 Anclar aquí (quieto 8 s)";
+}
+$("#ancAbs").onfocus=function(){ this.placeholder=(Sm.length&&(gpsFix||mode==="ar"))?("aquí ≈ "+fmtAbs(Math.max(Sm[0],Math.round(ar.abs)))):"K0+250 o 250"; };
+$("#ancBtn").onclick=function(){
+  if(!DATA||!DATA._ok||anc) return;
+  var a=parseAbs($("#ancAbs").value);
+  if(a==null){ toast("Escribe la abscisa del punto donde estás parado (ej. K0+250).",4000); return; }
+  var off=parseFloat(String($("#ancOff").value||"0").replace(",","."))||0;
+  var tg=pointAtAbs(a,off);
+  if(!tg){ toast("Abscisa fuera del tramo ("+fmtAbs1(Sm[0])+" a "+fmtAbs1(Sm[Sm.length-1])+").",4500); return; }
+  if(!(DATA.crs&&DATA.crs.proj)){ toast("El JSON no trae CRS: no hay GPS que anclar.",4500); return; }
+  if(gpsWatch==null) startGps();
+  anc={target:tg, abs:a, off:off, samples:[], t0:Date.now()};
+  anc.timer=setTimeout(finishAnchor,ANC_MS);
+  var b=this; b.disabled=true;
+  ancTick=setInterval(function(){ if(!anc) return;
+    var s=Math.max(0,Math.ceil((ANC_MS-(Date.now()-anc.t0))/1000));
+    b.textContent="⏳ Quieto… "+s+" s ("+anc.samples.length+" lecturas)"; },250);
+  toast("Quédate quieto en "+fmtAbs1(a)+(off?(" a "+Math.abs(off).toFixed(1)+" m "+(off>0?"Der":"Izq")):" sobre el eje")+" durante 8 s.",4000);
+};
+function finishAnchor(){
+  var A=anc; anc=null; clearInterval(ancTick); ancTick=null;
+  var b=$("#ancBtn"); b.disabled=false; b.textContent="📌 Anclar aquí (quieto 8 s)";
+  if(!A) return;
+  var s=A.samples.filter(function(p){ return p.acc<=40; });
+  if(s.length<3){ toast("Ancla fallida: solo "+s.length+" lecturas GPS útiles. Espera señal (±<40 m) y repite.",5500); return; }
+  var sw=0, mx=0, mz=0, ma=0;
+  s.forEach(function(p){ var w=1/Math.max(1,p.acc*p.acc); sw+=w; mx+=p.x*w; mz+=p.z*w; ma+=p.acc; });
+  mx/=sw; mz/=sw; ma/=s.length;
+  var dx=A.target.x-mx, dz=A.target.z-mz, m=Math.hypot(dx,dz);
+  if(m>60 && !confirm("La corrección sería de "+m.toFixed(0)+" m. ¿Seguro que estás en "+fmtAbs1(A.abs)+"?\nAceptar = aplicar · Cancelar = descartar")) return;
+  gpsCorr={dx:dx, dz:dz, on:true, t:Date.now()};
+  obsTrk=newTrk(); obsTrk.idx=A.target.idx;          // continuidad: sabemos en qué abscisa estás
+  gpsEMA={x:mx, z:mz};                                // arranca el filtro en el promedio (sin arrastre)
+  applyGpsPos();
+  toast("📌 Ancla aplicada: corrección "+m.toFixed(1)+" m (GPS ±"+ma.toFixed(0)+" m). Repite cada ~30 min o ~500 m.",6500);
+}
+$("#ancClr").onclick=function(){
+  cancelAnchor();
+  if(!gpsCorr.on){ toast("No hay ancla activa.",2000); return; }
+  gpsCorr={dx:0,dz:0,on:false,t:0}; applyGpsPos(); toast("Ancla quitada: posición GPS cruda.",2500);
+};
+
+/* ---------- mapa en vivo (vía fija, tú te mueves) ---------- */
+function flatCircle(r,col,op,ro){
+  var m=new THREE.Mesh(new THREE.CircleGeometry(r,40),
+    new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:op,depthTest:false,depthWrite:false}));
+  m.rotation.x=-Math.PI/2; m.renderOrder=ro; return m;
+}
+var meG=new THREE.Group(); meG.visible=false; scene.add(meG);
+var meAcc=flatCircle(1,0x2f9de0,0.16,19); meG.add(meAcc);
+var meDot=new THREE.Group(); meG.add(meDot);
+meDot.add(flatCircle(1.35,0xffffff,1,20));
+var _dot=flatCircle(1,0x2f9de0,1,21); _dot.position.y=0.01; meDot.add(_dot);
+var meArrow=new THREE.Group(); meG.add(meArrow);
+(function(){ var sh=new THREE.Shape(); sh.moveTo(0,3.4); sh.lineTo(1.3,1.3); sh.lineTo(-1.3,1.3); sh.lineTo(0,3.4);
+  var m=new THREE.Mesh(new THREE.ShapeGeometry(sh),
+    new THREE.MeshBasicMaterial({color:0x2f9de0,transparent:true,opacity:0.95,depthTest:false,depthWrite:false,side:THREE.DoubleSide}));
+  m.rotation.x=-Math.PI/2; m.renderOrder=21; meArrow.add(m); })();
+
+function mapFrameAll(){
+  if(!Cw.length) return;
+  var x0=Infinity,x1=-Infinity,z0=Infinity,z1=-Infinity;
+  Cw.forEach(function(p){ if(p[0]<x0)x0=p[0]; if(p[0]>x1)x1=p[0]; if(p[2]<z0)z0=p[2]; if(p[2]>z1)z1=p[2]; });
+  map.cx=(x0+x1)/2; map.cz=(z0+z1)/2;
+  var th=Math.tan(camera.fov*Math.PI/360), asp=Math.max(0.3,camera.aspect);
+  map.h=Math.max(60, Math.max((z1-z0)/2/th, (x1-x0)/2/(th*asp))*1.15);
+}
+function mapApply(){
+  if(map.follow && gpsFix){ map.cx=ar.px; map.cz=ar.pz; }
+  var by = gpsFix && map.follow ? ar.py : (Cw.length?Cw[nearestIdx(map.cx,map.cz)][1]:0);
+  camera.up.set(0,0,-1);                                  // norte arriba
+  camera.position.set(map.cx, by+map.h, map.cz);
+  camera.lookAt(map.cx, by, map.cz);
+}
+function meUpdate(){
+  var show=(mode==="map" && gpsFix);
+  meG.visible=show; if(!show) return;
+  var s=Math.max(0.6, map.h/90);
+  meG.position.set(ar.px, ar.py+0.3, ar.pz);
+  var ac=Math.max(0.5, gpsLastAcc||5); meAcc.scale.set(ac,ac,ac);
+  meDot.scale.set(s,s,s);
+  if(ar.active){ meArrow.visible=true; meArrow.scale.set(s,s,s);
+    meArrow.rotation.y=-(headingOfQuat(gyroQuat(_tq))+yawEff()); }   // rotación +Y = antihorario → se niega el azimut
+  else meArrow.visible=false;
+}
+var labelK=1;
+function setLabelScale(k){
+  if(Math.abs(k-labelK)/labelK<0.05 && k!==1) return;
+  labelK=k;
+  [postsGroup,hitosGroup].forEach(function(g){ if(!g) return;
+    g.traverse(function(o){ if(o.isSprite && o.userData.base){ o.scale.set(o.userData.base[0]*k,o.userData.base[1]*k,1); } }); });
+}
+$("#centerBtn").onclick=function(){
+  map.follow=true; this.classList.add("hide");
+  if(!gpsFix){ mapFrameAll(); toast(gpsWatch!=null?"Esperando posición GPS…":"GPS detenido: actívalo en ⚙.",3000); }
+};
+
+/* ---------- cámara de fondo ---------- */
+var camStream=null;
+function stopCam(){
+  if(!camStream) return;
+  camStream.getTracks().forEach(function(t){t.stop()}); camStream=null;
+  $("#cam").style.display="none"; scene.background=new THREE.Color(0x0e1418); $("#camBtn").textContent="📷 Cámara de fondo";
+}
+$("#camBtn").onclick=function(){
+  if(camStream){ stopCam(); return; }
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){ toast("Cámara no disponible (requiere https).",4000); return; }
+  navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:"environment"}},audio:false})
+    .then(function(s){ if(mode!=="ar"){ s.getTracks().forEach(function(t){t.stop()}); return; }
+      camStream=s; var v=$("#cam"); v.srcObject=s; v.style.display="block";
+      scene.background=null; $("#camBtn").textContent="📷 Quitar cámara"; toast("Cámara activa. La vía se superpone; la posición es aproximada.",4200); })
+    .catch(function(){ toast("No se pudo abrir la cámara (requiere https y permiso).",4200); });
+};
+
+/* ---------- modos ---------- */
+function setMode(m){
+  mode=m; stopGyro();
+  if(m!=="ar" && m!=="map") stopGps();
+  if(m!=="ar") stopCam();
+  document.querySelectorAll("#modeSeg button").forEach(function(b){ b.classList.toggle("on", b.dataset.m===m); });
+  $("#arControls").style.display=(m==="ar")?"block":"none";
+  $("#gpsControls").style.display=(m==="ar"||m==="map")?"block":"none";
+  $("#centerBtn").classList.toggle("hide", !(m==="map" && !map.follow));
+  setLabelScale(1);
+  if(!Cw.length) return;
+  if(m==="orbit"){ frameAll(); }
+  else if(m==="walk"){ var i=0; walkTrk=newTrk(); walk.pos.set(Cw[i][0], Cw[i][1]+ar.eye, Cw[i][2]);
+    walk.yaw=-ejeAz(i); walk.pitch=-0.05; walk.apply();              // [nav2] signo corregido: mira en sentido de avance
+    toast("Arrastra para mirar · WASD o pellizca para avanzar por la vía",3800); }
+  else if(m==="map"){
+    map.follow=true;
+    if(gpsFix) map.h=Math.min(Math.max(map.h,60),300); else mapFrameAll();
+    if(gpsWatch==null) startGps();
+    startGyro(true);
+    toast("Mapa en vivo (norte arriba): la vía queda fija y el punto azul eres tú. Arrastra para mover, pellizca para zoom.",5000);
+  }
+  else if(m==="ar"){ if(!(gpsWatch!=null && gpsFix)) paradoEn(0,8); obsKey=null; arApply(); startGyro(false);
+    if(gpsWatch==null && DATA && DATA.crs && DATA.crs.proj) startGps(); }   // [gpsauto] el GPS arranca solo al entrar a AR
+}
+document.querySelectorAll("#modeSeg button").forEach(function(b){ b.onclick=function(){ if(DATA&&DATA._ok) setMode(b.dataset.m); }; });
+
+/* ---------- panel ---------- */
+$("#gear").onclick=function(){ $("#panel").classList.toggle("show"); };
+$("#panelClose").onclick=function(){ $("#panel").classList.remove("show"); };
+$("#eye").oninput=function(){ ar.eye=+this.value; $("#eyeV").textContent=ar.eye.toFixed(1)+" m"; };
+$("#yawFine").oninput=function(){ var g=+this.value; ar.yawFine=g*d2r; $("#yawFineV").textContent=g.toFixed(1)+"°"; };
+function nudgeObs(dRight,dFwd){                 // +dRight=derecha del eje, +dFwd=adelante
+  if(!Cw.length) return;
+  var az=ejeAz(ar.idx);
+  var fx=Math.sin(az), fz=-Math.cos(az), rx=Math.cos(az), rz=Math.sin(az);
+  var mx=rx*dRight+fx*dFwd, mz=rz*dRight+fz*dFwd;
+  if(gpsWatch!=null && gpsEMA){                 // con GPS: el ajuste corrige el ancla (no se pierde en la próxima lectura)
+    if(!gpsCorr.on) gpsCorr={dx:0,dz:0,on:true,t:Date.now()};
+    gpsCorr.dx+=mx; gpsCorr.dz+=mz; applyGpsPos();
+    toast("Corrección GPS: "+Math.hypot(gpsCorr.dx,gpsCorr.dz).toFixed(1)+" m",1500);
+  } else { ar.px+=mx; ar.pz+=mz; obsKey=null; }
+}
+$("#mvL").onclick=function(){ nudgeObs(-1,0); };
+$("#mvR").onclick=function(){ nudgeObs( 1,0); };
+$("#mvF").onclick=function(){ nudgeObs(0, 1); };
+$("#mvB").onclick=function(){ nudgeObs(0,-1); };
+$("#opac").oninput=function(){ var v=+this.value; $("#opacV").textContent=v+"%"; if(meshObj){ meshObj.material.opacity=v/100; } };
+$("#colorMode").onchange=function(){ if(DATA&&DATA._ok) build(DATA,true); };
+$("#postInt").onchange=function(){ if(DATA && DATA._ok){ buildPosts(+this.value||0); labelK=1; if(mode==="map") setLabelScale(Math.max(1,map.h/45)); } };
+$("#hitosOn").onchange=function(){ if(DATA && DATA._ok){ buildHitos(this.checked); labelK=1; if(mode==="map") setLabelScale(Math.max(1,map.h/45)); } };
+$("#reset").onclick=function(){ if(!DATA||!DATA._ok) return; if(mode==="orbit")frameAll(); else if(mode==="map"){ map.follow=true; $("#centerBtn").classList.add("hide"); if(!gpsFix) mapFrameAll(); } else setMode(mode); };
+$("#reload").onclick=function(){ $("#drop").classList.remove("hide"); };
+
+/* estado de navegación al cargar un proyecto nuevo */
+function resetNav(){
+  stopGps(); cancelAnchor();
+  gpsCorr={dx:0,dz:0,on:false,t:0}; ghReset();
+  comp.ema=null; comp.rej=0; ar.calib=0; ar.yawFine=0; $("#yawFine").value=0; $("#yawFineV").textContent="0°";
+  obsTrk=newTrk(); walkTrk=newTrk(); obsKey=null;
+  ar.abs=Sm[0]||0; ar.off=0; ar.dist=null; ar.idx=0;
+  map.follow=true; labelK=1;
+}
+
+/* ---------- carga de archivo ---------- */
+function readFile(file){ var r=new FileReader(); r.onload=function(){
+  try{ var d=JSON.parse(r.result); if(!d.ribbon){ toast("JSON no reconocido (falta 'ribbon').",4000); return; } build(d); }
+  catch(e){ toast("No se pudo leer el JSON: "+(e.message||e),4500); } }; r.readAsText(file); }
+$("#pick").onclick=function(){ $("#file").click(); };
+$("#file").onchange=function(){ if(this.files[0]) readFile(this.files[0]); this.value=""; };
+["dragover","drop"].forEach(function(ev){ addEventListener(ev,function(e){e.preventDefault();}); });
+addEventListener("drop",function(e){ var f=e.dataTransfer&&e.dataTransfer.files&&e.dataTransfer.files[0]; if(f) readFile(f); });
+
+/* ---------- toast ---------- */
+var toastT=null;
+function toast(t,ms){ var n=$("#note"); n.textContent=t; n.classList.add("show");
+  clearTimeout(toastT); toastT=setTimeout(function(){ n.classList.remove("show"); }, ms||3000); }
+
+/* ---------- loop ---------- */
+addEventListener("resize",function(){ camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth,innerHeight); });
+var hudT=0;
+(function loop(){ requestAnimationFrame(loop);
+  var now=performance.now();
+  if(DATA && DATA._ok){
+    if(mode==="walk"){ walkStep();
+      var r=trackProject(camera.position.x,camera.position.z,walkTrk,0);
+      if(now-hudT>150){ hudT=now; hudUpdate(r); } }
+    else if(mode==="ar"){ arApply(); if(now-hudT>150){ hudT=now; hudUpdate(); } }
+    else if(mode==="map"){ mapApply(); setLabelScale(Math.max(1,map.h/45)); if(now-hudT>150){ hudT=now; hudUpdate(); } }
+    meUpdate();
+  }
+  renderer.render(scene,camera);
+})();
+
+}/* main */
+</script>
+</body>
+</html>
