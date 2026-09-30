@@ -3,12 +3,19 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#17212b">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="apple-touch-icon" href="./icons/icon-192.png">
+<link rel="icon" href="./icons/icon-192.png">
 <title>Visor AR — Vía (RoadExtract)</title>
 <style>
   :root{
     --bg:#0e1418; --panel:#17212b; --panel2:#1e2b36; --line:#2b3a47;
     --tx:#dbe7ef; --mut:#8aa0b0; --accent:#2f9de0; --accent2:#2a6f97;
-    --asfalto:#3a4550; --linea:#e8d24a; --borde:#e9edf1;
+    --ok:#3fb27f; --wa:#e0a43b; --bad:#e5603e;
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   html,body{margin:0;height:100%;background:var(--bg);color:var(--tx);
@@ -18,7 +25,7 @@
   canvas{display:block;touch-action:none}
 
   #drop{position:fixed;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;
-    background:radial-gradient(120% 120% at 50% 0%,#16222d 0%,#0e1418 70%);padding:24px}
+    background:radial-gradient(120% 120% at 50% 0%,#16222d 0%,#0e1418 70%);padding:24px;overflow:auto}
   #drop.hide{display:none}
   .card{width:min(540px,92vw);background:var(--panel);border:1px solid var(--line);
     border-radius:14px;padding:26px 24px;box-shadow:0 18px 50px rgba(0,0,0,.55)}
@@ -28,6 +35,11 @@
     background:var(--accent2);color:#fff;border:0;border-radius:10px;padding:13px;font-size:15px;font-weight:600}
   .pick:active{background:var(--accent)}
   #drop small{display:block;margin-top:12px;color:#6f8494;font-size:11.5px;line-height:1.5}
+  #recent{margin-top:14px}
+  #recent .rt{font-size:12px;color:var(--mut);font-weight:700;margin-bottom:6px}
+  .rrow{display:flex;gap:6px;margin-top:6px}
+  .rrow .btn{margin:0;text-align:left;font-weight:500}
+  .rrow .x{flex:0 0 40px;width:40px;text-align:center}
 
   #hud{position:fixed;z-index:10;left:0;right:0;top:0;display:flex;gap:6px;padding:10px;
     justify-content:center;flex-wrap:wrap;pointer-events:none}
@@ -37,55 +49,109 @@
     font-weight:600;cursor:pointer}
   .seg button.on{background:var(--accent2);color:#fff}
   .seg button+button{border-left:1px solid var(--line)}
+  .seg sup{font-size:9px;opacity:.8}
 
-  #panel{position:fixed;z-index:10;right:10px;bottom:64px;width:min(290px,86vw);
+  #panel{position:fixed;z-index:10;right:calc(66px + env(safe-area-inset-right,0px));bottom:calc(64px + env(safe-area-inset-bottom,0px));width:min(300px,86vw);
     background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 13px;
     box-shadow:0 8px 26px rgba(0,0,0,.5);display:none;
-    /* [fixmobile] nunca debe tapar toda la pantalla: altura tope + scroll interno */
     max-height:calc(100vh - 140px - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px));
     overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
   #panel.show{display:block}
-  /* Encabezado del panel con botón de cerrar (accesible aunque tape el engranaje) */
-  #panelHead{display:flex;align-items:center;justify-content:space-between;gap:8px;
-    position:sticky;top:-2px;background:var(--panel);padding-bottom:6px;margin-bottom:2px;z-index:1}
-  #panelClose{flex:0 0 auto;width:28px;height:28px;border-radius:8px;border:1px solid var(--line);
+  #panelHead{position:sticky;top:-12px;background:var(--panel);padding:2px 0 8px;margin:-2px 0 4px;z-index:2;border-bottom:1px solid var(--line)}
+  #panelHead .ph1{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
+  .ptabs{display:flex;gap:4px}
+  .ptabs button{flex:1 1 auto;min-width:0;padding:8px 6px;font-size:12px;font-weight:700;border-radius:8px;border:1px solid var(--line);
+    background:var(--panel2);color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
+  .ptabs button.on{background:var(--accent2);border-color:var(--accent2);color:#fff}
+  .tab{display:none}
+  .tab.on{display:block}
+  .sec0{font-size:13px;font-weight:700;color:var(--tx);margin:2px 0 4px}
+  .sec{font-size:13px;font-weight:700;color:var(--tx);margin:14px 0 4px;padding-top:12px;border-top:1px solid var(--line)}
+  .tag2{font-size:10.5px;font-weight:600;color:var(--mut);background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:1px 7px;margin-left:4px;white-space:nowrap}
+  .row2{display:flex;gap:8px;margin:8px 0}
+  .row2 label{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px;font-size:11.5px;color:var(--mut)}
+  .row2 label.lat{flex:0 0 92px}
+  .row2 .inp{width:100%;font-size:14px;padding:8px}
+  .chips{flex:1;display:flex;gap:6px;flex-wrap:wrap}
+  .chip{display:flex;align-items:center;gap:5px;font-size:12px;color:var(--tx);background:var(--panel2);border:1px solid var(--line);border-radius:16px;padding:5px 10px;white-space:nowrap;cursor:pointer}
+  .chip input{accent-color:var(--accent);margin:0}
+  .chip.off{opacity:.45}
+  .mv4{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:6px}
+  .mv4 .btn{margin:0;padding:8px}
+  .pinfo{font-size:12.5px;line-height:1.6;color:var(--mut);background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:8px 10px}
+  .pinfo b{color:var(--tx)}
+  #panelClose{flex:0 0 auto;width:30px;height:30px;border-radius:8px;border:1px solid var(--line);
     background:var(--panel2);color:var(--mut);font-size:15px;line-height:1;cursor:pointer}
   #panelClose:active{background:var(--accent2);color:#fff}
   #panel h3{margin:0 0 8px;font-size:12.5px;color:var(--mut);font-weight:700}
   .row{display:flex;align-items:center;gap:9px;margin:9px 0}
-  .row label{flex:0 0 82px;font-size:12px;color:var(--mut)}
-  .row input[type=range]{flex:1;accent-color:var(--accent)}
+  .row>label{flex:0 0 86px;font-size:12px;color:var(--mut)}
+  .row input[type=range]{flex:1;min-width:0;accent-color:var(--accent)}
   .row .val{flex:0 0 52px;text-align:right;font-size:12px;font-variant-numeric:tabular-nums}
   .btn{width:100%;background:var(--panel2);color:var(--tx);border:1px solid var(--line);
     border-radius:9px;padding:10px;font-size:13px;font-weight:600;cursor:pointer;margin-top:6px}
   .btn:active{background:var(--accent2)}
   .btn.warn{border-color:#7a4a2a;color:#f0b58a}
   .btn.primary{background:var(--accent2);border-color:var(--accent2);color:#fff}
+  .btn:disabled{opacity:.5}
+  .btn2{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+  .btn2 .btn{margin-top:6px}
+  .inp{flex:1;min-width:0;background:var(--panel2);color:var(--tx);border:1px solid var(--line);
+    border-radius:8px;padding:7px;font-size:12px;font-family:inherit}
+  .sub{font-size:11.5px;color:var(--mut);margin:12px 0 2px;border-top:1px solid var(--line);padding-top:10px;line-height:1.45}
+  .sub b{color:var(--tx)}
+  .hint{font-size:11px;color:var(--mut);line-height:1.4;margin:4px 0}
+  .hint.wa{color:var(--wa)}
+  .hint a{color:var(--accent)}
+  details.adv summary::marker{color:var(--accent)}
+  details.adv[open] summary{margin-bottom:4px}
+  details.adv{margin-top:8px;border:1px solid var(--line);border-radius:9px;padding:6px 9px}
+  details.adv summary{font-size:12px;color:var(--mut);cursor:pointer}
+  .chk{flex:1;font-size:12px;display:flex;align-items:center;gap:6px;color:var(--tx)}
+  .chk input{accent-color:var(--accent)}
 
-  #hb{position:fixed;z-index:10;left:10px;bottom:10px;background:var(--panel);border:1px solid var(--line);
+  #hb{position:fixed;z-index:10;left:calc(10px + env(safe-area-inset-left,0px));bottom:calc(10px + env(safe-area-inset-bottom,0px));
+    background:var(--panel);border:1px solid var(--line);
     border-radius:12px;padding:9px 12px;box-shadow:0 8px 26px rgba(0,0,0,.5);font-size:11px;color:var(--mut);
-    min-width:150px;display:none}
+    min-width:150px;max-width:calc(100vw - 90px);display:none}
   #hb.show{display:block}
   #hb b{color:var(--tx);font-variant-numeric:tabular-nums}
+  #hb .r.hide{display:none}
+  #hbTgtRow b{color:#ff8be6}
 
-  #gear{position:fixed;z-index:10;right:10px;bottom:10px;width:46px;height:46px;border-radius:50%;
-    background:var(--accent2);color:#fff;border:0;font-size:20px;cursor:pointer;
-    box-shadow:0 6px 18px rgba(0,0,0,.5)}
-  #gear.hide{display:none}
-  #note{position:fixed;z-index:10;left:50%;top:56px;transform:translateX(-50%);
-    background:rgba(20,30,38,.92);border:1px solid var(--line);color:var(--mut);
-    font-size:11.5px;padding:6px 12px;border-radius:20px;max-width:90vw;text-align:center;display:none}
+  /* columna de botones flotantes (derecha) */
+  #fabs{position:fixed;z-index:11;right:calc(10px + env(safe-area-inset-right,0px));
+    bottom:calc(64px + env(safe-area-inset-bottom,0px));   /* deja libre la esquina de la insignia de Netlify */
+    display:flex;flex-direction:column-reverse;align-items:flex-end;gap:10px;pointer-events:none}
+  #fabs>*{pointer-events:auto}
+  .fab{background:var(--panel);color:var(--tx);border:1px solid var(--line);border-radius:22px;padding:10px 14px;
+    font-size:13px;font-weight:600;cursor:pointer;box-shadow:0 6px 18px rgba(0,0,0,.5);white-space:nowrap}
+  .fab.on{background:var(--accent2);border-color:var(--accent2);color:#fff}
+  .fab.hide{display:none}
+  #gear{width:46px;height:46px;border-radius:50%;padding:0;background:var(--accent2);color:#fff;border:0;font-size:20px}
+  #markBtn{background:#8a2f6f;border-color:#8a2f6f;color:#fff}
+  body.panelOpen #fabs .fab:not(#gear){display:none}
+
+  #note{position:fixed;z-index:12;left:50%;top:calc(56px + env(safe-area-inset-top,0px));transform:translateX(-50%);
+    background:rgba(20,30,38,.94);border:1px solid var(--line);color:var(--tx);
+    font-size:12px;padding:7px 13px;border-radius:20px;max-width:92vw;text-align:center;display:none}
   #note.show{display:block}
 
-  /* ═══ [fixmobile] Ajustes para celular (Android/iOS) ═══
-     - El panel se vuelve una "hoja inferior" a lo ancho, con tope de altura y scroll.
-     - Se respetan las barras del sistema (safe-area).
-     - El engranaje y los HUD se separan de los bordes seguros. */
-  #gear{ right:calc(10px + env(safe-area-inset-right,0px));
-         bottom:calc(64px + env(safe-area-inset-bottom,0px)); }   /* [badge] deja libre la esquina de la insignia de Netlify */
-  #hb{ left:calc(10px + env(safe-area-inset-left,0px));
-       bottom:calc(10px + env(safe-area-inset-bottom,0px)); }
-  #hud{ padding-top:calc(10px + env(safe-area-inset-top,0px)); }
+  #cross{position:fixed;z-index:5;left:50%;top:50%;width:34px;height:34px;margin:-17px 0 0 -17px;pointer-events:none;display:none}
+  #cross.show{display:block}
+  #cross.onaxis:before,#cross.onaxis:after{background:#3fb27f}
+  #crossInfo{position:fixed;z-index:6;left:50%;top:calc(50% + 26px);transform:translateX(-50%);pointer-events:none;display:none;
+    background:rgba(16,24,31,.9);border:1px solid #ff4fd8;border-radius:9px;padding:5px 9px;font-size:11.5px;line-height:1.45;
+    color:var(--mut);white-space:nowrap;font-variant-numeric:tabular-nums;box-shadow:0 4px 14px rgba(0,0,0,.45)}
+  #crossInfo.show{display:block}
+  #crossInfo b{color:#fff;font-size:13px}
+  #crossInfo.onaxis{border-color:#3fb27f}
+  #cross:before,#cross:after{content:"";position:absolute;background:#ff4fd8;box-shadow:0 0 0 1px rgba(0,0,0,.6)}
+  #cross:before{left:16px;top:0;width:2px;height:34px}
+  #cross:after{top:16px;left:0;height:2px;width:34px}
+  #attrib{position:fixed;z-index:9;left:50%;transform:translateX(-50%);bottom:calc(2px + env(safe-area-inset-bottom,0px));
+    font-size:9.5px;color:#cfd8de;background:rgba(0,0,0,.55);padding:1px 6px;border-radius:6px;display:none;pointer-events:none;white-space:nowrap}
+  #attrib.show{display:block}
 
   @media (max-width:600px), (pointer:coarse){
     #panel{
@@ -94,131 +160,324 @@
       max-height:min(66vh, calc(100vh - 140px - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px)));
       border-radius:16px 16px 12px 12px;
     }
-    /* Deja sitio para no chocar con el engranaje flotante */
     #panel.show{ padding-bottom:64px; }
-    #gear{ width:52px;height:52px;font-size:22px; z-index:11; }
+    #gear{ width:52px;height:52px;font-size:22px; }
     #panelClose{ width:34px;height:34px;font-size:17px; }
-    .seg button{ padding:10px 12px; }
+    .seg button{ padding:10px 11px; }
+    #hb{font-size:10.5px;padding:8px 10px}
   }
-  /* [nav2] */
-  .inp{flex:1;min-width:0;background:var(--panel2);color:var(--tx);border:1px solid var(--line);
-    border-radius:8px;padding:7px;font-size:12px}
-  .sub{font-size:11.5px;color:var(--mut);margin:12px 0 2px;border-top:1px solid var(--line);padding-top:10px;line-height:1.45}
-  .btn:disabled{opacity:.6}
-  #centerBtn{position:fixed;z-index:10;right:calc(10px + env(safe-area-inset-right,0px));
-    bottom:calc(128px + env(safe-area-inset-bottom,0px));background:var(--panel);color:var(--tx);
-    border:1px solid var(--line);border-radius:22px;padding:10px 14px;font-size:13px;font-weight:600;
-    cursor:pointer;box-shadow:0 6px 18px rgba(0,0,0,.5)}
-  #centerBtn.hide{display:none}
-  /* [gpsperm] ayuda de permisos GPS */
-  #gpsHelp{position:fixed;inset:0;z-index:30;background:rgba(0,0,0,.72);display:flex;align-items:center;justify-content:center;padding:16px}
-  #gpsHelp.hide{display:none}
-  #gpsHelp .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;max-width:420px;width:100%;
-    max-height:88vh;overflow:auto;padding:18px;box-shadow:0 20px 50px rgba(0,0,0,.6)}
-  #gpsHelp h3{margin:0 0 8px;font-size:17px}
-  #gpsHelp p{margin:6px 0;font-size:13.5px;line-height:1.5;color:var(--tx)}
-  #gpsHelp ol{margin:6px 0 10px;padding-left:20px;font-size:13.5px;line-height:1.55}
-  #gpsHelp .tag{font-size:12px;color:var(--mut);margin-top:10px;font-weight:600}
-  </style>
+
+  /* ventanas modales */
+  .modal{position:fixed;inset:0;z-index:30;background:rgba(0,0,0,.72);display:flex;align-items:center;justify-content:center;padding:16px}
+  .modal.hide{display:none}
+  .modal .card{max-width:440px;width:100%;max-height:90vh;overflow:auto;padding:18px}
+  .modal h3{margin:0 0 8px;font-size:17px}
+  .modal p{margin:6px 0;font-size:13.5px;line-height:1.5;color:var(--tx)}
+  .modal ol{margin:6px 0 10px;padding-left:20px;font-size:13.5px;line-height:1.55}
+  .modal .tag{font-size:12px;color:var(--mut);margin-top:10px;font-weight:600}
+  #mkStat{font-size:12.5px;line-height:1.45;background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:8px 10px;margin:6px 0 4px}
+  #mkPrev{display:none;max-width:100%;max-height:180px;border-radius:8px;margin-top:6px}
+  textarea.inp{width:100%;min-height:54px;resize:vertical}
+  .pt{border:1px solid var(--line);border-radius:10px;padding:8px 10px;margin:7px 0;background:var(--panel2)}
+  .pt .h{display:flex;align-items:center;gap:8px;font-size:13px}
+  .pt .h b{font-size:14px}
+  .pt .dot{width:10px;height:10px;border-radius:50%;flex:0 0 10px}
+  .pt .m{font-size:11.5px;color:var(--mut);margin-top:3px;line-height:1.4;word-break:break-word}
+  .pt .a{display:flex;gap:6px;margin-top:6px}
+  .pt .a .btn{margin:0;padding:7px;font-size:12px}
+  /* Recorrer: reproducción */
+  #playBar{position:fixed;z-index:10;left:50%;transform:translateX(-50%);top:calc(58px + env(safe-area-inset-top,0px));
+    width:min(560px,calc(100vw - 16px));background:rgba(23,33,43,.92);border:1px solid var(--line);border-radius:12px;
+    padding:7px 10px 6px;box-shadow:0 6px 20px rgba(0,0,0,.45)}
+  #playBar.hide{display:none}
+  #playBar .pi{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+  #piAbs{font-size:24px;font-weight:800;color:#f2ead0;font-variant-numeric:tabular-nums;letter-spacing:.3px}
+  #piData{display:flex;gap:10px;font-size:12px;color:var(--mut);font-variant-numeric:tabular-nums;flex-wrap:wrap}
+  #piData span b{color:var(--tx)}
+  #playBar .pc{display:flex;gap:6px;margin-top:5px;align-items:center}
+  .pbtn{flex:0 0 auto;min-width:40px;height:34px;border-radius:8px;border:1px solid var(--line);background:var(--panel2);color:var(--tx);
+    font-size:14px;font-weight:700;cursor:pointer;padding:0 8px}
+  .pbtn.play{background:var(--accent2);border-color:var(--accent2);color:#fff;min-width:52px;font-size:16px}
+  #playBar select.inp{flex:1;min-width:0;height:34px;padding:4px 6px}
+  #playBar .ps{display:flex;align-items:center;gap:8px;margin-top:4px}
+  #pbSlider{flex:1;min-width:0;accent-color:#e8d24a}
+  #piCur{font-size:12px;color:#ffd08a;margin-top:2px;min-height:0;font-variant-numeric:tabular-nums}
+  #piCur:empty{display:none}
+  #pbEnd{font-size:11px;color:var(--mut);font-variant-numeric:tabular-nums}
+  /* AR Pro */
+  .xrbox{border:1px solid var(--accent2);border-radius:10px;padding:9px 10px;margin-bottom:8px;font-size:12px;line-height:1.45;color:var(--mut)}
+  .xrbox b{color:var(--tx)}
+  #xrBar{position:fixed;z-index:13;left:8px;right:8px;bottom:calc(8px + env(safe-area-inset-bottom,0px));
+    background:rgba(23,33,43,.93);border:1px solid var(--line);border-radius:14px;padding:8px 10px;box-shadow:0 8px 26px rgba(0,0,0,.5)}
+  #xrBar.hide{display:none}
+  #xrBar .xh{display:flex;align-items:center;gap:8px}
+  #xrStat{flex:1;font-size:12.5px;font-weight:600;line-height:1.35}
+  .xmin{flex:0 0 34px;height:30px;border-radius:8px;border:1px solid var(--line);background:var(--panel2);color:var(--tx);font-size:15px}
+  #xrBody.min{display:none}
+  .xrb{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}
+  .xrb .btn{padding:10px 4px;font-size:12.5px}
+  #xrBar .row{margin:6px 0}
+  body.xr #hud, body.xr #measureBtn, body.xr #centerBtn, body.xr #shotBtn, body.xr #xrFab, body.xr #mkFotoRow,
+  body.xr #hbHdgRow, body.xr #hbAncRow{display:none!important}
+  body.xr #cross{display:block}
+  body.xr #hb{top:calc(10px + env(safe-area-inset-top,0px));bottom:auto}
+  body.xr #fabs{top:calc(10px + env(safe-area-inset-top,0px));bottom:auto;flex-direction:column}
+  body.xr #note{top:calc(118px + env(safe-area-inset-top,0px))}
+  body.xr.panelOpen #xrBar{display:none}
+  #photoView img{max-width:100%;max-height:70vh;border-radius:8px;display:block;margin:0 auto}
+</style>
 </head>
 <body>
 
 <video id="cam" playsinline muted autoplay></video>
 <div id="stage"></div>
+<div id="ui">
+<div id="cross"></div>
+<div id="crossInfo"></div>
+<div id="attrib"></div>
 
 <div id="hud">
   <div class="seg" id="modeSeg">
     <button data-m="orbit" class="on">Vista</button>
     <button data-m="map">Mapa en vivo</button>
     <button data-m="walk">Recorrer</button>
-    <button data-m="ar">AR</button>
+    <button data-m="ar">AR <sup>beta</sup></button>
   </div>
 </div>
 <div id="note"></div>
-<div id="gpsHelp" class="hide"><div class="card">
+
+<!-- Recorrer: reproducción -->
+<div id="playBar" class="hide">
+  <div class="pi">
+    <div id="piAbs">K0+000.0</div>
+    <div id="piData"><span id="piCota">—</span><span id="piPend">—</span><span id="piPer">—</span></div>
+    <div id="piCur"></div>
+  </div>
+  <div class="pc">
+    <button id="pbStart" class="pbtn" title="Ir al inicio">⏮</button>
+    <button id="pbPlay" class="pbtn play" title="Reproducir / pausar (barra espaciadora)">▶</button>
+    <button id="pbDir" class="pbtn" title="Sentido del recorrido">→ K+</button>
+    <select id="pbSpeed" class="inp" title="Velocidad">
+      <option value="5">5 km/h</option><option value="20">20 km/h</option><option value="40" selected>40 km/h</option>
+      <option value="60">60 km/h</option><option value="80">80 km/h</option><option value="150">150 km/h</option>
+    </select>
+    <select id="pbLane" class="inp" title="Posición del observador">
+      <option value="der" selected>Carril der.</option><option value="eje">Eje</option><option value="izq">Carril izq.</option>
+    </select>
+  </div>
+  <div class="ps"><input id="pbSlider" type="range" min="0" max="100" step="0.1" value="0"><span id="pbEnd">—</span></div>
+</div>
+
+<div id="hb">
+  <div class="r hide" id="hbXrRow">AR Pro: <b id="hbXr">—</b></div>
+  <div class="r">Abscisa: <b id="hbAbs">—</b></div>
+  <div class="r">Lateral: <b id="hbLat">—</b></div>
+  <div class="r">Rumbo eje: <b id="hbAz">—</b></div>
+  <div class="r" id="hbCfRow">Corte/relleno: <b id="hbCf">—</b></div>
+  <div class="r hide" id="hbCurRow">Curva: <b id="hbCur">—</b></div>
+  <div class="r" id="hbGpsRow">GPS: <b id="hbGps">—</b></div>
+  <div class="r" id="hbHdgRow">Orientación: <b id="hbHdg">—</b></div>
+  <div class="r" id="hbAncRow">Ancla: <b id="hbAnc">—</b></div>
+  <div class="r hide" id="hbTgtRow">Objetivo: <b id="hbTgt">—</b></div>
+</div>
+
+<div id="fabs">
+  <button id="gear" class="fab hide" aria-label="Ajustes">⚙</button>
+  <button id="centerBtn" class="fab hide">◎ Centrar</button>
+  <button id="markBtn" class="fab hide">🚩 Marcar</button>
+  <button id="measureBtn" class="fab hide">📏 Medir</button>
+  <button id="shotBtn" class="fab hide">📸</button>
+  <button id="xrFab" class="fab hide">🚀 AR Pro</button>
+</div>
+
+<div id="panel">
+  <div id="panelHead">
+    <div class="ph1"><h3 id="panelTitle" style="margin:0">Ajustes</h3><button id="panelClose" aria-label="Cerrar">✕</button></div>
+    <div id="ptabs" class="ptabs" role="tablist">
+      <button data-t="ar">🎥 AR</button><button data-t="gps">📍 GPS</button><button data-t="ir">🧭 Ir a</button><button data-t="capas">👁 Capas</button><button data-t="proy">📂 Proyecto</button>
+    </div>
+  </div>
+
+  <!-- 🎥 AR -->
+  <section id="tab-ar" class="tab">
+    <div class="xrbox">
+      <div class="sec0">🚀 AR Pro <span class="tag2">recomendado</span></div>
+      <div class="hint">La imagen queda fija al terreno. Se amarra a 2 estacas conocidas, idealmente a 20–50 m entre sí.</div>
+      <div id="xrAvail" class="hint">Comprobando…</div>
+      <div id="xrSetupBox"><div id="xrSetup">
+        <div class="row2">
+          <label>Estaca A<input id="xrAabs" class="inp" type="text" inputmode="decimal" placeholder="K0+100" autocomplete="off"></label>
+          <label class="lat">Lateral m<input id="xrAoff" class="inp" type="number" step="0.1" value="0" title="+ Der / − Izq"></label>
+        </div>
+        <div class="row2">
+          <label>Estaca B<input id="xrBabs" class="inp" type="text" inputmode="decimal" placeholder="K0+140" autocomplete="off"></label>
+          <label class="lat">Lateral m<input id="xrBoff" class="inp" type="number" step="0.1" value="0" title="+ Der / − Izq"></label>
+        </div>
+        <div class="hint">Lateral: + derecha / − izquierda del eje.</div>
+      </div></div>
+      <button class="btn primary" id="xrBtn" disabled>🚀 Iniciar AR Pro</button>
+    </div>
+
+    <div class="sec">AR básico <span class="tag2">orientativo · ±3–15 m</span></div>
+    <div class="btn2"><button class="btn" id="camBtn">📷 Cámara</button><button class="btn" id="calib">🎯 Calibrar</button></div>
+    <div class="hint">Calibrar: apunta a lo largo de la vía, hacia abscisas crecientes, y toca.</div>
+    <div class="hint" id="declHint"></div>
+    <details class="adv"><summary>Ajustes avanzados</summary>
+      <div class="row"><label>Ajuste vertical</label><input id="dz" type="range" min="-20" max="20" step="0.5" value="0"><span class="val" id="dzV">0 m</span></div>
+      <div class="hint" id="dzHint">Sube o baja la vía si se ve flotando o enterrada (cortes y rellenos).</div>
+      <div class="row"><label>Campo visual</label><input id="fov" type="range" min="35" max="95" step="1" value="65"><span class="val" id="fovV">65°</span></div>
+      <div class="hint">Hasta que un poste o estaca coincida en tamaño con la cámara.</div>
+      <div class="row"><label>Rumbo fino</label><input id="yawFine" type="range" min="-30" max="30" step="0.5" value="0"><span class="val" id="yawFineV">0°</span></div>
+      <div class="hint">Gira la vía unos grados después de calibrar.</div>
+      <div class="row"><label>Orientación</label>
+        <select id="hdgSrc" class="inp">
+          <option value="compass">🧭 Brújula + calibrar</option>
+          <option value="manual">✋ Solo calibrar (sin brújula)</option>
+        </select></div>
+      <div class="row" id="declRow"><label>Declinación °</label><input id="decl" class="inp" type="number" step="0.1" min="-30" max="30" value="0" title="+ Este / − Oeste"></div>
+    </details>
+  </section>
+
+  <!-- 📍 GPS -->
+  <section id="tab-gps" class="tab">
+    <div class="btn2" id="gpsRow"><button class="btn" id="gps">📍 Seguir GPS</button><button class="btn" id="snap">🧲 Al eje: OFF</button></div>
+    <div class="sec" id="ancTitle">📌 Ancla <span class="tag2">quita el corrimiento del GPS</span></div>
+    <div class="hint" id="ancHint">Párate sobre una estaca o PR conocido, escribe su abscisa y ancla.</div>
+    <div class="row2">
+      <label>Abscisa<input id="ancAbs" class="inp" type="text" inputmode="decimal" placeholder="K0+250" autocomplete="off"></label>
+      <label class="lat">Lateral m<input id="ancOff" class="inp" type="number" step="0.1" value="0" title="+ Der / − Izq"></label>
+    </div>
+    <div class="btn2"><button class="btn primary" id="ancBtn">📌 Anclar (8 s)</button><button class="btn" id="ancClr">✕ Quitar</button></div>
+  </section>
+
+  <!-- 🧭 Ir a -->
+  <section id="tab-ir" class="tab">
+    <div class="sec0">🧭 Ir a una abscisa</div>
+    <div class="row2">
+      <label>Abscisa<input id="tgAbs" class="inp" type="text" inputmode="decimal" placeholder="K0+250" autocomplete="off"></label>
+      <label class="lat">Lateral m<input id="tgOff" class="inp" type="number" step="0.1" value="0" title="+ Der / − Izq"></label>
+    </div>
+    <div class="btn2"><button class="btn primary" id="tgGo">🧭 Ir</button><button class="btn" id="tgClr">✕ Quitar</button></div>
+    <div class="hint">Muestra distancia y dirección en la fila «Objetivo» de abajo.</div>
+    <div class="row" id="tgListRow" style="display:none"><label>Saltar a</label><select id="tgList" class="inp"></select></div>
+    <div class="sec">🚩 Puntos marcados</div>
+    <button class="btn" id="ptsBtn">📋 Ver / exportar puntos (0)</button>
+  </section>
+
+  <!-- 👁 Capas -->
+  <section id="tab-capas" class="tab">
+    <div class="row"><label>Color</label>
+      <select id="colorMode" class="inp">
+        <option value="asfalto">Asfalto + demarcación</option>
+        <option value="peralte">Por peralte</option>
+        <option value="cf">Corte / relleno</option>
+      </select></div>
+    <div class="hint" id="colorHint"></div>
+    <div class="row"><label>Postes K</label>
+      <select id="postInt" class="inp">
+        <option value="0">Sin postes</option>
+        <option value="20">cada 20 m</option>
+        <option value="50">cada 50 m</option>
+        <option value="100" selected>cada 100 m</option>
+        <option value="500">cada 500 m</option>
+      </select></div>
+    <div class="row"><label>Mostrar</label>
+      <div class="chips">
+        <label class="chip"><input type="checkbox" id="hitosOn" checked> Hitos</label>
+        <label class="chip"><input type="checkbox" id="chafOn" checked> <span id="chafTxt">Chaflanes y DV</span></label>
+        <label class="chip" id="obrasChip" style="display:none"><input type="checkbox" id="obrasOn" checked> Obras</label>
+      </div></div>
+    <div class="row"><label>Mapa base</label>
+      <select id="baseMap" class="inp">
+        <option value="none">Ninguno</option>
+        <option value="osm">Calles</option>
+        <option value="sat">Satélite</option>
+      </select></div>
+    <div class="hint">Solo en Mapa en vivo · necesita internet (lo ya visto queda guardado).</div>
+    <div class="row"><label>Opacidad</label><input id="opac" type="range" min="20" max="100" step="5" value="85"><span class="val" id="opacV">85%</span></div>
+  </section>
+
+  <!-- 📂 Proyecto -->
+  <section id="tab-proy" class="tab">
+    <div id="projInfo" class="pinfo"></div>
+    <button class="btn" id="reset">↺ Reencuadrar la vista</button>
+    <button class="btn" id="reload">📂 Abrir otro proyecto</button>
+  </section>
+</div>
+
+<div id="drop">
+  <div class="card">
+    <h1>Visor AR — Vía</h1>
+    <p>Carga el archivo <b>*_AR.json</b> exportado desde RoadExtract Pro (función <code>exportarViaAR</code>). Verás la calzada diseñada a escala real, podrás ubicarte con GPS, marcar puntos en campo y exportarlos.</p>
+    <button class="pick" id="pick">Seleccionar JSON</button>
+    <input id="file" type="file" accept=".json,application/json" style="display:none">
+    <button class="btn" id="backBtn" style="display:none">↩ Volver al visor</button>
+    <div id="recent"></div>
+    <small>Esto es una <b>ayuda de visualización</b>, no un replanteo topográfico. GPS de celular: ±3–15 m; con <b>📌 Anclar</b> en una abscisa conocida el corrimiento baja a ~1–3 m mientras no cambien las condiciones. <b>Mapa en vivo</b> es el modo más confiable; <b>AR</b> es orientativo. GPS y cámara requieren <b>https</b>. Instálala como app (menú del navegador → <i>Instalar / Agregar a pantalla de inicio</i>) para abrirla sin señal.</small>
+  </div>
+</div>
+
+<!-- ayuda de permisos GPS -->
+<div id="gpsHelp" class="modal hide"><div class="card">
   <h3 id="gpsHelpT">📍 Activa la ubicación</h3>
   <div id="gpsHelpB"></div>
   <button class="btn primary" id="gpsHelpRetry">🔄 Ya lo activé — reintentar</button>
   <button class="btn" id="gpsHelpClose">Cerrar</button>
 </div></div>
 
-<div id="hb">
-  <div>Abscisa: <b id="hbAbs">—</b></div>
-  <div>Lateral: <b id="hbLat">—</b></div>
-  <div>Rumbo eje: <b id="hbAz">—</b></div>
-  <div>GPS: <b id="hbGps">—</b></div>
-  <div>Orientación: <b id="hbHdg">—</b></div>
-  <div>Ancla: <b id="hbAnc">—</b></div>
-</div>
+<!-- marcar punto -->
+<div id="markDlg" class="modal hide"><div class="card">
+  <h3>🚩 Marcar punto</h3>
+  <div id="mkStat">—</div>
+  <div class="row"><label>Tipo</label><select id="mkTipo" class="inp"></select></div>
+  <div class="row" style="align-items:flex-start"><label>Descripción</label><textarea id="mkDesc" class="inp" maxlength="500" placeholder="Ej.: alcantarilla 36&quot; colapsada, cabezote izq."></textarea></div>
+  <div class="row" id="mkFotoRow"><label>Foto</label><input id="mkFoto" type="file" accept="image/*" class="inp" style="padding:5px"></div>
+  <img id="mkPrev" alt="">
+  <div class="btn2"><button class="btn primary" id="mkSave" disabled>💾 Guardar</button><button class="btn" id="mkCancel">Cancelar</button></div>
+</div></div>
 
-<button id="centerBtn" class="hide">📍 Centrar</button>
-<button id="gear">⚙</button>
-<div id="panel">
-  <div id="panelHead"><h3 id="panelTitle" style="margin:0">Ajustes de vista</h3><button id="panelClose" aria-label="Cerrar">✕</button></div>
-  <div id="arControls" style="display:none">
-    <div class="row"><label>Altura ojo</label><input id="eye" type="range" min="1" max="3" step="0.1" value="1.6"><span class="val" id="eyeV">1.6 m</span></div>
-    <div class="row"><label>Rumbo fino</label><input id="yawFine" type="range" min="-30" max="30" step="0.5" value="0"><span class="val" id="yawFineV">0°</span></div>
-    <div class="row"><label>Mover obs.</label>
-      <div style="flex:1;display:grid;grid-template-columns:repeat(4,1fr);gap:6px">
-        <button class="btn" id="mvL" style="margin:0;padding:8px" title="izquierda">◀</button>
-        <button class="btn" id="mvR" style="margin:0;padding:8px" title="derecha">▶</button>
-        <button class="btn" id="mvF" style="margin:0;padding:8px" title="adelante">▲</button>
-        <button class="btn" id="mvB" style="margin:0;padding:8px" title="atrás">▼</button>
-      </div></div>
-    <div class="row"><label>Orientación</label>
-      <select id="hdgSrc" class="inp">
-        <option value="compass">🧭 Brújula (auto)</option>
-        <option value="gps">🚶 GPS al caminar</option>
-        <option value="manual">✋ Manual (calibrar)</option>
-      </select></div>
-    <div class="row"><label>Decl. mag. (°)</label><input id="decl" class="inp" type="number" step="0.1" min="-30" max="30" value="0" title="Declinación magnética local, + Este / − Oeste"></div>
-    <button class="btn" id="calib">🎯 Calibrar rumbo (apunta hacia abscisas crecientes y toca)</button>
-    <button class="btn warn" id="camBtn">📷 Cámara de fondo</button>
+<!-- lista de puntos -->
+<div id="ptsDlg" class="modal hide"><div class="card">
+  <h3>📋 Puntos marcados</h3>
+  <div id="ptsInfo" class="hint"></div>
+  <div id="ptsList"></div>
+  <div class="sub">Exportar</div>
+  <button class="btn primary" id="exZip">📦 ZIP (CSV + GeoJSON + KML + fotos)</button>
+  <div class="btn2">
+    <button class="btn" id="exCsv">CSV</button>
+    <button class="btn" id="exKml">KML (Google Earth)</button>
   </div>
-  <div id="gpsControls" style="display:none">
-    <button class="btn" id="gps">📍 Seguir con GPS</button>
-    <button class="btn" id="snap">🧲 Pegar al eje: OFF</button>
-    <div class="sub">📌 Ancla — quita el corrimiento del GPS. Párate en un punto conocido del diseño (estaca, PR, abscisa) y toca Anclar.</div>
-    <div class="row"><label>Abscisa</label><input id="ancAbs" class="inp" type="text" inputmode="decimal" placeholder="K0+250 o 250" autocomplete="off"></div>
-    <div class="row"><label>Lateral (m)</label><input id="ancOff" class="inp" type="number" step="0.1" value="0" placeholder="+ Der / − Izq"></div>
-    <button class="btn" id="ancBtn">📌 Anclar aquí (quieto 8 s)</button>
-    <button class="btn" id="ancClr">✕ Quitar ancla</button>
-  </div>
-  <div id="commonControls">
-    <div class="row"><label>Color</label>
-      <select id="colorMode" style="flex:1;background:var(--panel2);color:var(--tx);border:1px solid var(--line);border-radius:8px;padding:7px;font-size:12px">
-        <option value="asfalto">Asfalto + demarcación</option>
-        <option value="peralte">Por peralte</option>
-      </select></div>
-    <div class="row"><label>Opacidad</label><input id="opac" type="range" min="20" max="100" step="5" value="85"><span class="val" id="opacV">85%</span></div>
-    <div class="row"><label>Postes K</label>
-      <select id="postInt" style="flex:1;background:var(--panel2);color:var(--tx);border:1px solid var(--line);border-radius:8px;padding:7px;font-size:12px">
-        <option value="0">Off</option>
-        <option value="20">cada 20 m</option>
-        <option value="50">cada 50 m</option>
-        <option value="100" selected>cada 100 m</option>
-        <option value="500">cada 500 m</option>
-      </select></div>
-    <div class="row"><label>Hitos</label>
-      <label style="flex:1;font-size:12px;display:flex;align-items:center;gap:6px;color:var(--tx)">
-        <input type="checkbox" id="hitosOn" checked style="accent-color:var(--accent)"> PI · PC · PT · obligados
-      </label></div>
-    <button class="btn" id="reset">↺ Reencuadrar</button>
-    <button class="btn" id="reload">📂 Cargar otro JSON</button>
-  </div>
-</div>
+  <button class="btn" id="exGeo">GeoJSON</button>
+  <button class="btn" id="ptsClose">Cerrar</button>
+</div></div>
 
-<div id="drop">
-  <div class="card">
-    <h1>Visor AR — Vía</h1>
-    <p>Carga el archivo <b>*_AR.json</b> exportado desde RoadExtract Pro (botón/función <code>exportarViaAR</code>). Verás la calzada diseñada a escala real. En <b>Mirar (AR)</b> se superpone sobre el terreno real usando la cámara y el giroscopio.</p>
-    <button class="pick" id="pick">Seleccionar JSON</button>
-    <input id="file" type="file" accept=".json,application/json" style="display:none">
-    <small>Esto es una <b>ayuda de visualización</b>, no un replanteo. GPS de celular: ±3–15 m; con <b>📌 Anclar</b> en una abscisa conocida el corrimiento baja a ~1–3 m mientras no cambien las condiciones. <b>Mapa en vivo</b> es el modo más confiable; <b>AR</b> es orientativo. En iPhone/iPad, GPS y cámara requieren <b>https</b>.</small>
+<div id="photoView" class="modal hide"><div class="card">
+  <img id="photoImg" alt="">
+  <button class="btn" id="photoClose">Cerrar</button>
+</div></div>
+
+<!-- barra de AR Pro (WebXR) -->
+<div id="xrBar" class="hide">
+  <div class="xh"><div id="xrStat">Sin alinear</div><button id="xrMin" class="xmin" aria-label="Minimizar">▾</button></div>
+  <div id="xrBody">
+    <div id="xrSetupSlot"></div>
+    <div class="xrb">
+      <button class="btn primary" id="xrA">📍 Capturar A</button>
+      <button class="btn primary" id="xrB">📍 Capturar B</button>
+      <button class="btn" id="xrBaim">🎯 Apuntar a B</button>
+    </div>
+    <div class="hint" id="xrHelp"></div>
+    <button class="btn warn" id="xrExit">✕ Salir de AR Pro</button>
   </div>
 </div>
+</div><!-- /ui -->
 
 <script>
+/* ============ service worker (uso sin señal) ============ */
+if("serviceWorker" in navigator && (location.protocol==="https:"||location.hostname==="localhost"||location.hostname==="127.0.0.1")){
+  addEventListener("load",function(){ navigator.serviceWorker.register("./sw.js").catch(function(){}); });
+}
+
 /* ============ carga de THREE y proj4 (local primero, CDN de respaldo) ============ */
 (function(){
   function load(urls,cb){var i=0;(function n(){if(i>=urls.length){cb(new Error("no cargó"));return;}
@@ -242,21 +501,71 @@ window._loadSeq([
 function main(){
 "use strict";
 var $=function(s){return document.querySelector(s)};
+var WGS='+proj=longlat +datum=WGS84 +no_defs';
+var d2r=Math.PI/180;
+var MAPFOV=65;
+
+/* ---------- almacenamiento local (localStorage para ajustes, IndexedDB para proyectos y puntos) ---------- */
+function lsGet(k,def){ try{ var v=localStorage.getItem(k); return v==null?def:v; }catch(e){ return def; } }
+function lsSet(k,v){ try{ localStorage.setItem(k,v); }catch(e){} }
+
+var DBP=null, MEMKV={}, MEMPTS={};
+function dbOpen(){
+  if(DBP) return DBP;
+  DBP=new Promise(function(res){
+    try{
+      if(!window.indexedDB){ res(null); return; }
+      var rq=indexedDB.open("visorvias",1);
+      rq.onupgradeneeded=function(){ var db=rq.result;
+        if(!db.objectStoreNames.contains("kv")) db.createObjectStore("kv");
+        if(!db.objectStoreNames.contains("points")){ var s=db.createObjectStore("points",{keyPath:"uid"}); s.createIndex("pid","pid",{unique:false}); } };
+      rq.onsuccess=function(){ res(rq.result); };
+      rq.onerror=function(){ res(null); }; rq.onblocked=function(){ res(null); };
+    }catch(e){ res(null); }
+  });
+  return DBP;
+}
+function dbReq(store,mode,fn){
+  return dbOpen().then(function(db){
+    if(!db) return Promise.reject(new Error("nodb"));
+    return new Promise(function(res,rej){
+      try{ var tx=db.transaction(store,mode), st=tx.objectStore(store), r=fn(st), out;
+        if(r) r.onsuccess=function(){ out=r.result; };
+        tx.oncomplete=function(){ res(out); }; tx.onerror=function(){ rej(tx.error); }; tx.onabort=function(){ rej(tx.error); };
+      }catch(e){ rej(e); }
+    });
+  });
+}
+function kvGet(k){ return dbReq("kv","readonly",function(s){ return s.get(k); }).catch(function(){ return MEMKV[k]; }); }
+function kvSet(k,v){ return dbReq("kv","readwrite",function(s){ s.put(v,k); }).catch(function(){ MEMKV[k]=v; }); }
+function kvDel(k){ return dbReq("kv","readwrite",function(s){ s.delete(k); }).catch(function(){ delete MEMKV[k]; }); }
+function ptsLoad(pid){ return dbReq("points","readonly",function(s){ return s.index("pid").getAll(pid); })
+  .then(function(a){ return a||[]; }).catch(function(){ return (MEMPTS[pid]||[]).slice(); }); }
+function ptsPut(p){ return dbReq("points","readwrite",function(s){ s.put(p); })
+  .catch(function(){ var a=MEMPTS[p.pid]=MEMPTS[p.pid]||[]; a.push(p); toast("⚠ Sin almacenamiento persistente: el punto se perderá al cerrar. Exporta antes de salir.",5000); }); }
+function ptsDel(uid,pid){ return dbReq("points","readwrite",function(s){ s.delete(uid); })
+  .catch(function(){ MEMPTS[pid]=(MEMPTS[pid]||[]).filter(function(p){ return p.uid!==uid; }); }); }
+var persistAsked=false;
+function askPersist(){ if(persistAsked) return; persistAsked=true;
+  try{ if(navigator.storage&&navigator.storage.persist) navigator.storage.persist().catch(function(){}); }catch(e){} }
 
 /* ---------- escena ---------- */
 var stageEl=$("#stage");
 var scene=new THREE.Scene(); scene.background=new THREE.Color(0x0e1418);
 var camera=new THREE.PerspectiveCamera(65, innerWidth/innerHeight, 0.05, 60000);
 camera.up.set(0,1,0);
-var renderer=new THREE.WebGLRenderer({antialias:true, alpha:true, preserveDrawingBuffer:true});
+var ocam=new THREE.OrthographicCamera(-1,1,1,-1,0.1,200000);   /* Mapa en vivo: ortográfica (sin paralaje con el mapa base) */
+var renderer=new THREE.WebGLRenderer({antialias:true, alpha:true});
 renderer.setPixelRatio(Math.min(devicePixelRatio,2));
 renderer.setSize(innerWidth,innerHeight); stageEl.appendChild(renderer.domElement);
-scene.add(new THREE.HemisphereLight(0xbfd3e0,0x25333d,1.15));
-var dl=new THREE.DirectionalLight(0xffffff,.55); dl.position.set(1,2,1); scene.add(dl);
+function activeCam(){ return (mode==="map"&&!xr.on)?ocam:camera; }
+/* todo el proyecto cuelga de worldRoot: identidad normalmente; en AR Pro = transformación proyecto → espacio de ARCore */
+var worldRoot=new THREE.Group(); worldRoot.matrixAutoUpdate=false; scene.add(worldRoot);
 
-var DATA=null, group=null, meshObj=null, lineC=null, lineL=null, lineR=null;
-var anchor=null, Cw=[], Lw=[], Rw=[], AB=[], PE=null, roadLen=0, laneW=6;
-var Sm=[];   /* [nav2] abscisa por vértice del eje: AB si es válida (misma longitud y creciente); si no, longitud horizontal acumulada */
+var DATA=null, PID=null, P4=null, group=null, meshObj=null, demG=null, gridObj=null, chafG=null;
+var PEL=null, PER=null, CURV=[], CURVV=[], OBRAS=[], obrasG=null;   /* v2: peralte por lado, curvas, curvas verticales, obras */
+var anchor=null, Cw=[], Lw=[], Rw=[], TERw=null, AB=[], PE=null, CF=null, roadLen=0, laneW=6, minY=0, maxY=0;
+var Sm=[];   /* abscisa por vértice del eje: AB si es válida (misma longitud y creciente); si no, longitud horizontal acumulada */
 function buildSm(){
   var N=Cw.length; Sm=new Array(N); if(!N) return;
   var ok=Array.isArray(AB) && AB.length===N && isFinite(+AB[0]);
@@ -265,59 +574,110 @@ function buildSm(){
   else{ Sm[0]=(Array.isArray(AB)&&isFinite(+AB[0]))?+AB[0]:0;
     for(var k=1;k<N;k++) Sm[k]=Sm[k-1]+Math.hypot(Cw[k][0]-Cw[k-1][0],Cw[k][2]-Cw[k-1][2]); }
 }
-/* [nav2] convergencia de cuadrícula: azimut de cuadrícula del norte verdadero en el proyecto */
+function hasCRS(){ return !!P4; }
+/* convergencia de cuadrícula: azimut de cuadrícula del norte verdadero en el proyecto */
 function calcConv(d){
   d._conv=0;
   try{
-    if(!(d.crs&&d.crs.proj&&window.proj4)) return;
-    var W='+proj=longlat +datum=WGS84 +no_defs';
+    if(!P4) return;
     var e=anchor.e, n=anchor.n; if(!isFinite(e)||!isFinite(n)) return;
-    var ll=proj4(d.crs.proj,W,[e,n]), p1=proj4(W,d.crs.proj,[ll[0],ll[1]+0.001]);
+    var ll=P4.forward([e,n]), p1=P4.inverse([ll[0],ll[1]+0.001]);
     var c=Math.atan2(p1[0]-e,p1[1]-n); if(isFinite(c)&&Math.abs(c)<0.2) d._conv=c;
   }catch(err){ d._conv=0; }
 }
 
 /* mundo Y-up:  X=Este,  Y=arriba,  Z=-Norte  (mirar -Z = mirar al Norte) */
 function toWorld(e,n,z){ return [ e-anchor.e, z-anchor.z, -(n-anchor.n) ]; }
+function toEN(x,z){ return [x+anchor.e, anchor.n-z]; }
+function toLL(e,n){ if(!P4) return null; try{ var ll=P4.forward([e,n]); return (isFinite(ll[0])&&isFinite(ll[1]))?ll:null; }catch(err){ return null; } }
+function llToWorld(lon,lat,y){ var en=P4.inverse([lon,lat]); return [en[0]-anchor.e, y, -(en[1]-anchor.n)]; }
 
-/* rampa de color por peralte (azul=- , verde≈0 , rojo=+) */
-function peralteColor(p){
-  var t=Math.max(-1,Math.min(1,p/8)); // ±8%
-  var stops=[[43,108,176],[63,178,127],[224,164,59],[229,96,62]];
-  var u=(t+1)/2*(stops.length-1), i=Math.floor(u), f=u-i;
-  var a=stops[Math.max(0,i)], b=stops[Math.min(stops.length-1,i+1)];
-  return [(a[0]+(b[0]-a[0])*f)/255,(a[1]+(b[1]-a[1])*f)/255,(a[2]+(b[2]-a[2])*f)/255];
+/* rampas de color */
+function ramp(stops,t){ var u=t*(stops.length-1), i=Math.floor(u), f=u-i;
+  var a=stops[Math.max(0,Math.min(stops.length-1,i))], b=stops[Math.min(stops.length-1,i+1)];
+  return [(a[0]+(b[0]-a[0])*f)/255,(a[1]+(b[1]-a[1])*f)/255,(a[2]+(b[2]-a[2])*f)/255]; }
+function peralteColor(p){ var t=Math.max(-1,Math.min(1,p/8)); return ramp([[43,108,176],[63,178,127],[224,164,59],[229,96,62]],(t+1)/2); }
+/* corte (+, terreno arriba de la rasante) café · relleno (−) azul · ±5 m */
+function cfColor(v){ if(v==null||!isFinite(v)) return [0.35,0.35,0.35]; var t=Math.max(-1,Math.min(1,v/5));
+  return ramp([[40,110,200],[95,150,205],[150,150,150],[190,140,80],[190,95,40]],(t+1)/2); }
+function hex2rgb(h){ return [((h>>16)&255)/255,((h>>8)&255)/255,(h&255)/255]; }
+
+function disposeTree(o){ if(!o) return; o.traverse(function(c){
+  if(c.geometry) c.geometry.dispose();
+  if(c.material){ (Array.isArray(c.material)?c.material:[c.material]).forEach(function(m){ if(m.map) m.map.dispose(); m.dispose(); }); } }); }
+
+/* ---------- validación del JSON (antes de tocar el proyecto cargado) ---------- */
+function validPt(p,need3){ return Array.isArray(p) && isFinite(+p[0]) && isFinite(+p[1]) && (!need3 || isFinite(+p[2])); }
+function validate(d){
+  if(!d||typeof d!=="object") return "El archivo no es un objeto JSON.";
+  if(!d.ribbon||!Array.isArray(d.ribbon.C)||d.ribbon.C.length<2) return "JSON no reconocido (falta ribbon.C con al menos 2 puntos).";
+  var N=d.ribbon.C.length;
+  if(!Array.isArray(d.ribbon.L)||!Array.isArray(d.ribbon.R)||d.ribbon.L.length!==N||d.ribbon.R.length!==N)
+    return "JSON inválido: ribbon.L/C/R deben tener la misma cantidad de puntos.";
+  for(var i=0;i<N;i++){
+    if(!validPt(d.ribbon.C[i],true)||!validPt(d.ribbon.L[i],true)||!validPt(d.ribbon.R[i],true))
+      return "JSON inválido: punto "+i+" de ribbon sin coordenadas numéricas [E,N,Z].";
+  }
+  if(d.anchor && !(isFinite(+d.anchor.e)&&isFinite(+d.anchor.n)&&isFinite(+d.anchor.z))) return "JSON inválido: anchor sin e/n/z numéricos.";
+  return null;
+}
+/* id estable del proyecto: nombre + primer punto del eje (a 1 m) → los puntos marcados sobreviven a una re-exportación */
+function projId(d){
+  var c=d.ribbon.C[0], s=(d.proyecto||"sin_nombre")+"|"+Math.round(+c[0])+"|"+Math.round(+c[1]);
+  var h=2166136261; for(var i=0;i<s.length;i++){ h^=s.charCodeAt(i); h=Math.imul(h,16777619); }
+  return "p"+(h>>>0).toString(36);
 }
 
-/* ---------- construir la cinta de la vía ---------- */
+/* ---------- construir la vía ---------- */
 function build(d, rebuild){
   DATA=d;
-  if(!d.ribbon||!d.ribbon.C||d.ribbon.C.length<2){ toast("JSON no reconocido (falta ribbon).",4000); return; }
-  anchor=d.anchor||{e:d.ribbon.C[0][0], n:d.ribbon.C[0][1], z:d.ribbon.C[0][2]};
-  laneW=d.lane||6; AB=d.abs||[]; PE=(Array.isArray(d.peralte)&&d.peralte.length===d.ribbon.C.length)?d.peralte:null;
-  if(!d.ribbon.L||!d.ribbon.R||d.ribbon.L.length!==d.ribbon.C.length||d.ribbon.R.length!==d.ribbon.C.length){ toast("JSON inválido: ribbon.L/C/R deben tener la misma cantidad de puntos.",5000); return; }
   var L=d.ribbon.L, C=d.ribbon.C, R=d.ribbon.R, N=C.length;
+  anchor=d.anchor?{e:+d.anchor.e,n:+d.anchor.n,z:+d.anchor.z,lat:d.anchor.lat,lon:d.anchor.lon}:{e:+C[0][0], n:+C[0][1], z:+C[0][2]};
+  laneW=d.lane||6; AB=d.abs||[]; PE=(Array.isArray(d.peralte)&&d.peralte.length===N)?d.peralte:null;
+  PEL=(Array.isArray(d.peralteL)&&d.peralteL.length===N)?d.peralteL:null; PER=(Array.isArray(d.peralteR)&&d.peralteR.length===N)?d.peralteR:null;
+  if(!(PEL&&PER)){ PEL=PER=null; } else if(!PE) PE=PER;
+  CURV=(Array.isArray(d.curvas)?d.curvas:[]).filter(function(c){ return c&&isFinite(+c.PC)&&isFinite(+c.PT)&&+c.PT>+c.PC; }).sort(function(a,b){ return a.PC-b.PC; });
+  CURVV=(Array.isArray(d.curvasV)?d.curvasV:[]).filter(function(c){ return c&&isFinite(+c.PCV)&&isFinite(+c.PTV)&&+c.PTV>=+c.PCV; }).sort(function(a,b){ return a.PCV-b.PCV; });
+  OBRAS=(Array.isArray(d.obras)?d.obras:[]).filter(function(o){ return o&&isFinite(+o.e)&&isFinite(+o.n); });
+  P4=null;
+  if(d.crs&&d.crs.proj&&window.proj4){ try{ P4=proj4(d.crs.proj,WGS); P4.forward([anchor.e,anchor.n]); }catch(err){ P4=null; if(!rebuild) toast("CRS del JSON no válido para proj4: sin GPS ni mapa base.",5000); } }
 
-  if(group){ scene.remove(group); }
-  group=new THREE.Group(); scene.add(group);
+  if(group){ worldRoot.remove(group); disposeTree(group); }
+  postsGroup=null; hitosGroup=null; demG=null; chafG=null; gridObj=null;
+  group=new THREE.Group(); worldRoot.add(group);
 
   Lw=[];Cw=[];Rw=[];
   for(var i=0;i<N;i++){
-    Lw.push(toWorld(L[i][0],L[i][1],L[i][2]));
-    Cw.push(toWorld(C[i][0],C[i][1],C[i][2]));
-    Rw.push(toWorld(R[i][0],R[i][1],R[i][2]));
+    Lw.push(toWorld(+L[i][0],+L[i][1],+L[i][2]));
+    Cw.push(toWorld(+C[i][0],+C[i][1],+C[i][2]));
+    Rw.push(toWorld(+R[i][0],+R[i][1],+R[i][2]));
   }
-  // longitud
+  // terreno natural en el eje (opcional) → corte/relleno y altura del observador en AR
+  TERw=null; CF=null;
+  if(Array.isArray(d.terreno)&&d.terreno.length===N){
+    TERw=new Array(N); CF=new Array(N); var nOk=0;
+    for(var t=0;t<N;t++){ var tz=d.terreno[t]; if(tz!=null&&isFinite(+tz)){ TERw[t]=+tz-anchor.z; CF[t]=TERw[t]-Cw[t][1]; nOk++; } else { TERw[t]=null; CF[t]=null; } }
+    if(nOk<2){ TERw=null; CF=null; }
+  }
   roadLen=0; for(var j=1;j<N;j++){var a=Cw[j],b=Cw[j-1];roadLen+=Math.hypot(a[0]-b[0],a[1]-b[1],a[2]-b[2]);}
+  minY=Infinity; maxY=-Infinity; Cw.forEach(function(p){ if(p[1]<minY)minY=p[1]; if(p[1]>maxY)maxY=p[1]; });
   buildSm(); calcConv(d);
 
-  // ---- malla de superficie (2 triángulos por segmento, L-C y C-R) ----
+  var colSel=$("#colorMode");
+  colSel.querySelector('option[value="peralte"]').disabled=!PE;
+  colSel.querySelector('option[value="cf"]').disabled=!CF;
+  if((colSel.value==="peralte"&&!PE)||(colSel.value==="cf"&&!CF)) colSel.value="asfalto";
+  var colMode=colSel.value;
+  $("#colorHint").textContent = colMode==="cf" ? "Café = corte (terreno encima de la rasante) · azul = relleno · escala ±5 m."
+    : colMode==="peralte" ? (PEL ? "Inclinación de la calzada: verde = bombeo · rojo = sube a la derecha · azul = sube a la izquierda (±8 %)." : "Azul = peralte negativo · verde ≈ 0 · rojo = positivo · escala ±8 %.")
+    : (!PE&&!CF ? "El JSON no trae peralte ni terreno: solo modo asfalto." : "");
+
+  // ---- malla de superficie ----
   var V=[], COL=[], IDX=[];
   function push(p){ V.push(p[0],p[1],p[2]); return V.length/3-1; }
-  var colMode=$("#colorMode").value;
   for(var k=0;k<N;k++){
-    var col = (colMode==="peralte" && PE) ? peralteColor(PE[k]) : hex2rgb(0x3a4550);
-    var iL=push(Lw[k]), iC=push(Cw[k]), iR=push(Rw[k]);
+    var col = (colMode==="peralte" && PE) ? peralteColor(PEL ? (+PER[k]-+PEL[k])/2 : +PE[k]) : (colMode==="cf" && CF) ? cfColor(CF[k]) : hex2rgb(0x3a4550);
+    push(Lw[k]); push(Cw[k]); push(Rw[k]);
     COL.push(col[0],col[1],col[2], col[0],col[1],col[2], col[0],col[1],col[2]);
     if(k>0){
       var pL=(k-1)*3, pC=(k-1)*3+1, pR=(k-1)*3+2, cL=k*3, cC=k*3+1, cR=k*3+2;
@@ -327,55 +687,135 @@ function build(d, rebuild){
   var geo=new THREE.BufferGeometry();
   geo.setAttribute("position", new THREE.Float32BufferAttribute(V,3));
   geo.setAttribute("color", new THREE.Float32BufferAttribute(COL,3));
-  geo.setIndex(IDX); geo.computeVertexNormals();
+  geo.setIndex(IDX);
   var mat=new THREE.MeshBasicMaterial({vertexColors:true, side:THREE.DoubleSide, transparent:true, opacity:(+$("#opac").value||85)/100, depthWrite:false});
-  meshObj=new THREE.Mesh(geo,mat); group.add(meshObj);
+  meshObj=new THREE.Mesh(geo,mat); meshObj.renderOrder=1; group.add(meshObj);
 
-  // ---- demarcación: eje y bordes ----
-  lineC=polyline(Cw, 0xe8d24a, 2);   group.add(lineC);
-  lineL=polyline(Lw, 0xe9edf1, 1.5);  group.add(lineL);
-  lineR=polyline(Rw, 0xe9edf1, 1.5);  group.add(lineR);
-  if(colMode==="peralte"){ lineC.visible=lineL.visible=lineR.visible=false; }
+  // ---- demarcación: franjas reales (12–15 cm) + línea de 1 px para la vista lejana ----
+  demG=new THREE.Group(); group.add(demG);
+  demG.add(strip(Cw,0.12,0xe8d24a,0.02,2)); demG.add(strip(Lw,0.15,0xe9edf1,0.02,2)); demG.add(strip(Rw,0.15,0xe9edf1,0.02,2));
+  demG.add(polyline(Cw,0xe8d24a)); demG.add(polyline(Lw,0xe9edf1)); demG.add(polyline(Rw,0xe9edf1));
+  demG.visible=(colMode==="asfalto");
 
-  // piso de referencia (solo aporta en Vista general)
-  var span=Math.max(200, roadLen*0.15);
-  var grid=new THREE.GridHelper(span, Math.min(60,Math.round(span/10)), 0x2b3a47, 0x1b2833);
-  grid.position.set(Cw[0][0], Math.min.apply(null,Cw.map(function(p){return p[1]}))-0.02, Cw[0][2]);
-  group.add(grid);
+  // piso de referencia (Vista y Recorrer)
+  var x0=Infinity,x1=-Infinity,z0=Infinity,z1=-Infinity;
+  Cw.forEach(function(p){ if(p[0]<x0)x0=p[0]; if(p[0]>x1)x1=p[0]; if(p[2]<z0)z0=p[2]; if(p[2]>z1)z1=p[2]; });
+  var span=Math.max(200, Math.max(x1-x0,z1-z0)*1.2);
+  gridObj=new THREE.GridHelper(span, Math.min(60,Math.round(span/10)), 0x2b3a47, 0x1b2833);
+  gridObj.position.set((x0+x1)/2, minY-0.05, (z0+z1)/2);
+  group.add(gridObj);
 
+  buildChaflanes();
   buildPosts(+($("#postInt").value||0));
   buildHitos($("#hitosOn").checked);
+  buildObras();
 
   DATA._ok=true;
   labelK=1;
-  if(rebuild){ if(mode==="map") setLabelScale(Math.max(1,map.h/45)); return; }
+  if(rebuild){ applyModeVis(); if(mode==="map") setLabelScale(Math.max(1,map.h/45),true); return; }
+
+  PID=projId(d);
+  tilesClear();
   resetNav();
   $("#drop").classList.add("hide");
-  $("#gear").classList.remove("hide");
+  ["#gear","#shotBtn"].forEach(function(s){ $(s).classList.remove("hide"); });
   $("#hb").classList.add("show");
+  $("#hbCfRow").classList.toggle("hide",!CF);
+  $("#hbCurRow").classList.toggle("hide",!CURV.length);
+  fillTgList();
+  $("#dzHint").textContent = TERw ? "La altura ya sale del terreno del JSON; ajústala solo si estás lejos del eje."
+                                   : "Sube o baja la vía si se ve flotando o enterrada (cortes y rellenos).";
+  // declinación desde el JSON (RoadExtract la puede exportar como 'decl', en grados, + Este)
+  var dj = d.decl!=null ? +d.decl : (d.declinacion!=null ? +d.declinacion : NaN);
+  if(isFinite(dj) && Math.abs(dj)<=30){ declDeg=dj; $("#decl").value=dj; lsSet("viaAR_decl",String(dj)); }
+  updDeclHint();
   setMode("orbit"); frameAll();
+  loadPoints(); projInfo();
 
-  var geoTxt = (anchor.lat!=null)
-     ? "Georref: "+(+anchor.lat).toFixed(5)+", "+(+anchor.lon).toFixed(5)
-     : "Sin georreferencia (colocación manual)";
+  var ll=anchor.lat!=null?[+anchor.lon,+anchor.lat]:toLL(anchor.e,anchor.n);
+  var geoTxt = ll ? "Georref: "+ll[1].toFixed(5)+", "+ll[0].toFixed(5) : "Sin georreferencia (colocación manual)";
   toast("Vía cargada ✓ "+(d.proyecto||"")+" · "+roadLen.toFixed(0)+" m · calzada "+laneW+" m · "+geoTxt, 5200);
 }
-function hex2rgb(h){ return [((h>>16)&255)/255,((h>>8)&255)/255,(h&255)/255]; }
-function polyline(pts,color,w){
+function polyline(pts,color){
   var g=new THREE.BufferGeometry(); var arr=new Float32Array(pts.length*3);
-  for(var i=0;i<pts.length;i++){arr[i*3]=pts[i][0];arr[i*3+1]=pts[i][1]+0.02;arr[i*3+2]=pts[i][2];}
+  for(var i=0;i<pts.length;i++){arr[i*3]=pts[i][0];arr[i*3+1]=pts[i][1]+0.03;arr[i*3+2]=pts[i][2];}
   g.setAttribute("position",new THREE.Float32BufferAttribute(arr,3));
-  return new THREE.Line(g,new THREE.LineBasicMaterial({color:color,linewidth:w,transparent:true,opacity:0.95}));
+  var l=new THREE.Line(g,new THREE.LineBasicMaterial({color:color,transparent:true,opacity:0.95})); l.renderOrder=3; return l;
+}
+/* franja horizontal de ancho w (m) centrada en la polilínea (WebGL ignora linewidth) */
+function strip(pts,w,color,lift,ro){
+  var N=pts.length, V=new Float32Array(N*6), I=[];
+  for(var i=0;i<N;i++){
+    var a=pts[Math.max(0,i-1)], b=pts[Math.min(N-1,i+1)], tx=b[0]-a[0], tz=b[2]-a[2], L=Math.hypot(tx,tz)||1;
+    var nx=-tz/L*w/2, nz=tx/L*w/2, p=pts[i];
+    V[i*6]=p[0]+nx; V[i*6+1]=p[1]+lift; V[i*6+2]=p[2]+nz;
+    V[i*6+3]=p[0]-nx; V[i*6+4]=p[1]+lift; V[i*6+5]=p[2]-nz;
+    if(i>0){ var p0=(i-1)*2, p1=i*2; I.push(p0,p0+1,p1, p0+1,p1+1,p1); }
+  }
+  var g=new THREE.BufferGeometry(); g.setAttribute("position",new THREE.BufferAttribute(V,3)); g.setIndex(I);
+  var m=new THREE.Mesh(g,new THREE.MeshBasicMaterial({color:color,side:THREE.DoubleSide,transparent:true,opacity:0.95,depthWrite:false,
+    polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-2}));
+  m.renderOrder=ro; return m;
+}
+
+/* ---------- chaflanes (ribbon.CL / ribbon.CR) y derecho de vía (dv) — opcionales ---------- */
+function buildChaflanes(){
+  if(chafG){ group.remove(chafG); disposeTree(chafG); chafG=null; }
+  var d=DATA, N=Cw.length, has=false;
+  chafG=new THREE.Group();
+  [["CL",Lw],["CR",Rw]].forEach(function(pair){
+    var arr=d.ribbon[pair[0]], edge=pair[1];
+    if(!Array.isArray(arr)||arr.length!==N) return;
+    var S=arr.map(function(p){ return validPt(p,true)?toWorld(+p[0],+p[1],+p[2]):null; });
+    var V=[], COL=[];
+    for(var k=1;k<N;k++){
+      if(!S[k]||!S[k-1]) continue;
+      var e0=edge[k-1], e1=edge[k], s0=S[k-1], s1=S[k];
+      var c0=(s0[1]>e0[1]+0.05)?[0.63,0.44,0.24]:[0.31,0.60,0.35], c1=(s1[1]>e1[1]+0.05)?[0.63,0.44,0.24]:[0.31,0.60,0.35];
+      V.push(e0[0],e0[1],e0[2], s0[0],s0[1],s0[2], e1[0],e1[1],e1[2],  s0[0],s0[1],s0[2], s1[0],s1[1],s1[2], e1[0],e1[1],e1[2]);
+      COL.push(c0[0],c0[1],c0[2], c0[0],c0[1],c0[2], c1[0],c1[1],c1[2], c0[0],c0[1],c0[2], c1[0],c1[1],c1[2], c1[0],c1[1],c1[2]);
+    }
+    if(V.length){
+      var g=new THREE.BufferGeometry(); g.setAttribute("position",new THREE.Float32BufferAttribute(V,3)); g.setAttribute("color",new THREE.Float32BufferAttribute(COL,3));
+      var m=new THREE.Mesh(g,new THREE.MeshBasicMaterial({vertexColors:true,side:THREE.DoubleSide,transparent:true,opacity:0.42,depthWrite:false}));
+      m.renderOrder=0; chafG.add(m); has=true;
+    }
+    // línea de chaflán (tramos continuos)
+    var run=[];
+    function flush(){ if(run.length>=2) chafG.add(polyline(run,0xff9f43)); run=[]; }
+    S.forEach(function(p){ if(p) run.push(p); else flush(); }); flush();
+  });
+  // derecho de vía: dv = {L:[[e,n,(z)],...], R:[...]}  o  dv = [[[e,n],...], ...]
+  var dvs=[];
+  if(d.dv){ if(Array.isArray(d.dv)) dvs=d.dv; else { if(Array.isArray(d.dv.L)) dvs.push(d.dv.L); if(Array.isArray(d.dv.R)) dvs.push(d.dv.R); } }
+  dvs.forEach(function(line){
+    if(!Array.isArray(line)) return;
+    var pts=[];
+    line.forEach(function(p){ if(!validPt(p,false)) return;
+      var w=toWorld(+p[0],+p[1],anchor.z);
+      w[1] = (p.length>2&&isFinite(+p[2])) ? (+p[2]-anchor.z) : projFinish(projRange(w[0],w[2],null,null)).py;
+      pts.push(w); });
+    if(pts.length<2) return;
+    var g=new THREE.BufferGeometry().setFromPoints(pts.map(function(p){ return new THREE.Vector3(p[0],p[1]+0.05,p[2]); }));
+    var l=new THREE.Line(g,new THREE.LineDashedMaterial({color:0xff5aa0,dashSize:2,gapSize:1.5}));
+    l.computeLineDistances(); l.renderOrder=3; chafG.add(l); has=true;
+  });
+  $("#chafOn").disabled=!has;
+  $("#chafTxt").textContent = has ? "Chaflanes y DV" : "Chaflanes (no vienen)";
+  $("#chafOn").parentNode.classList.toggle("off",!has);
+  chafG.visible=has && $("#chafOn").checked;
+  group.add(chafG);
 }
 
 /* ---------- postes de abscisado (K x+yyy) ---------- */
-var postsGroup=null;
-function fmtAbs(m){ var km=Math.floor(m/1000), r=Math.round(m-km*1000);
-  return "K"+km+"+"+String(r).padStart(3,"0"); }
+var postsGroup=null, POST_MAX=400;
+function fmtAbs(m){ var s=m<0?"-":""; m=Math.abs(m); var km=Math.floor(m/1000), r=Math.round(m-km*1000);
+  if(r===1000){ km++; r=0; } return s+"K"+km+"+"+String(r).padStart(3,"0"); }
 function labelSprite(text,border){
   var fs=44, pad=12, c=document.createElement("canvas"), g=c.getContext("2d");
+  text=String(text==null?"":text);
   g.font="bold "+fs+"px 'Segoe UI',Arial";
-  var w=Math.ceil(g.measureText(text).width);
+  var w=Math.max(8,Math.ceil(g.measureText(text).width));
   c.width=w+pad*2; c.height=fs+pad*2;
   g=c.getContext("2d"); g.font="bold "+fs+"px 'Segoe UI',Arial";
   var r=12; g.beginPath();
@@ -385,71 +825,109 @@ function labelSprite(text,border){
   var bc = border!=null ? ("#"+("000000"+border.toString(16)).slice(-6)) : "#e8d24a";
   g.lineWidth=3; g.strokeStyle=bc; g.stroke();
   g.fillStyle="#f2ead0"; g.textBaseline="middle"; g.fillText(text,pad,c.height/2+2);
-  var tex=new THREE.CanvasTexture(c); tex.minFilter=THREE.LinearFilter; tex.needsUpdate=true;
+  var tex=new THREE.CanvasTexture(c); tex.minFilter=THREE.LinearFilter; tex.generateMipmaps=false; tex.needsUpdate=true;
   var sp=new THREE.Sprite(new THREE.SpriteMaterial({map:tex,transparent:true,depthTest:false,depthWrite:false}));
-  var s=1.5/c.height; sp.scale.set(c.width*s, c.height*s, 1); sp.userData.base=[c.width*s, c.height*s];
+  var s=1.5/c.height; sp.scale.set(c.width*s, c.height*s, 1); sp.userData.base=[c.width*s, c.height*s]; sp.renderOrder=30;
+  if(labelK!==1) sp.scale.set(c.width*s*labelK, c.height*s*labelK, 1);
   return sp;
 }
+var _pl=null;   /* segmentos de todos los postes → un solo objeto (antes 2 objetos por poste) */
 function placePost(absVal,i){
   var ox=Rw[i][0]-Cw[i][0], oz=Rw[i][2]-Cw[i][2], on=Math.hypot(ox,oz)||1; ox/=on; oz/=on;
   var bx=Rw[i][0]+ox*0.8, by=Rw[i][1], bz=Rw[i][2]+oz*0.8, h=2.2;
-  var g=new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(bx,by,bz),new THREE.Vector3(bx,by+h,bz)]);
-  postsGroup.add(new THREE.Line(g,new THREE.LineBasicMaterial({color:0xf2ead0})));
-  // banderín superior
-  var bg=new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(bx,by+h,bz),new THREE.Vector3(bx+ox*0.5,by+h-0.15,bz+oz*0.5)]);
-  postsGroup.add(new THREE.Line(bg,new THREE.LineBasicMaterial({color:0xe8d24a})));
-  var sp=labelSprite(fmtAbs(absVal)); sp.position.set(bx,by+h+0.75,bz); postsGroup.add(sp);
+  _pl.P.push(bx,by,bz, bx,by+h,bz,  bx,by+h,bz, bx+ox*0.5,by+h-0.15,bz+oz*0.5);
+  _pl.C.push(0.95,0.92,0.82, 0.95,0.92,0.82,  0.91,0.82,0.29, 0.91,0.82,0.29);
+  var sp=labelSprite(fmtAbs(absVal)); sp.position.set(bx,by+h+0.75,bz); sp.userData.pi=postsGroup.userData.n++; postsGroup.add(sp);
+}
+function segLines(P,C){
+  var g=new THREE.BufferGeometry(); g.setAttribute("position",new THREE.Float32BufferAttribute(P,3)); g.setAttribute("color",new THREE.Float32BufferAttribute(C,3));
+  return new THREE.LineSegments(g,new THREE.LineBasicMaterial({vertexColors:true}));
 }
 function buildPosts(interval){
-  if(postsGroup){ group.remove(postsGroup);
-    postsGroup.traverse(function(o){ if(o.geometry)o.geometry.dispose();
-      if(o.material){ if(o.material.map)o.material.map.dispose(); o.material.dispose(); } });
-    postsGroup=null; }
+  if(postsGroup){ group.remove(postsGroup); disposeTree(postsGroup); postsGroup=null; }
   if(!interval || interval<=0 || !Sm.length) return;
-  postsGroup=new THREE.Group();
-  var next=Math.ceil(Sm[0]/interval)*interval, n=0, MAX=2000;
-  for(var i=0;i<Sm.length && n<MAX;i++){
-    while(Sm[i]>=next-1e-6 && n<MAX){ placePost(next,i); next+=interval; n++; }
+  var span=Sm[Sm.length-1]-Sm[0];
+  if(span/interval>POST_MAX){   // tope: cada etiqueta es una textura; demasiadas cuelgan un celular
+    var opts=[20,50,100,500,1000], nv=opts.filter(function(v){ return v>interval && span/v<=POST_MAX; })[0]||Math.ceil(span/POST_MAX/100)*100;
+    toast("Postes cada "+interval+" m serían "+Math.round(span/interval)+": se usan cada "+nv+" m para no saturar el equipo.",5000);
+    interval=nv;
   }
+  postsGroup=new THREE.Group(); postsGroup.userData={interval:interval,n:0,step:1,key:""};
+  _pl={P:[],C:[]};
+  var next=Math.ceil(Sm[0]/interval)*interval, n=0;
+  for(var i=0;i<Sm.length && n<POST_MAX;i++){
+    while(Sm[i]>=next-1e-6 && n<POST_MAX){ placePost(next,i); next+=interval; n++; }
+  }
+  if(_pl.P.length) postsGroup.add(segLines(_pl.P,_pl.C));
+  _pl=null;
   group.add(postsGroup);
 }
 
 /* ---------- hitos: PI / PC / PT / obligados ---------- */
+/* ---------- obras (v2): alcantarillas, box, etc. ---------- */
+function obraCorta(t){ t=String(t||"Obra"); return t.length>26?t.slice(0,25)+"…":t; }
+function buildObras(){
+  if(obrasG){ group.remove(obrasG); disposeTree(obrasG); obrasG=null; }
+  $("#obrasChip").style.display=OBRAS.length?"":"none";
+  if(!OBRAS.length) return;
+  obrasG=new THREE.Group(); obrasG.userData={}; var P=[], Cc=[], col=0x2f9de0, rgb=hex2rgb(col), hgt=3.6;
+  OBRAS.forEach(function(o){
+    var w=toWorld(+o.e,+o.n,anchor.z);
+    w[1]=(o.z!=null&&isFinite(+o.z))?(+o.z-anchor.z):projFinish(projRange(w[0],w[2],null,null)).py;
+    P.push(w[0],w[1],w[2], w[0],w[1]+hgt,w[2]); Cc.push(rgb[0],rgb[1],rgb[2], rgb[0],rgb[1],rgb[2]);
+    var sp=labelSprite("⛃ "+obraCorta(o.tipo)+" "+fmtAbs(+o.abs),col); sp.position.set(w[0],w[1]+hgt+0.9,w[2]); obrasG.add(sp);
+    var b=flatCircle(0.6,col,0.9,18); b.position.set(w[0],w[1]+0.06,w[2]); obrasG.add(b);
+  });
+  obrasG.add(segLines(P,Cc));
+  obrasG.visible=$("#obrasOn").checked;
+  group.add(obrasG);
+}
+/* curva horizontal / vertical en una abscisa */
+function curvaEn(a){ for(var i=0;i<CURV.length;i++){ if(a>=CURV[i].PC-1e-6&&a<=CURV[i].PT+1e-6) return {c:CURV[i]}; }
+  var dir=(mode==="walk"&&play.dir<0)?-1:1, best=null;
+  CURV.forEach(function(c){ var d=dir>0?c.PC-a:a-c.PT; if(d>0&&(!best||d<best.d)) best={c:c,d:d}; });
+  return best?{next:best.c,d:best.d}:null; }
+function curvaTxt(a,largo){
+  if(!CURV.length) return "";
+  var q=curvaEn(a); if(!q) return "Tangente";
+  if(q.c){ var c=q.c, t=c.id+" · R="+Math.round(c.R)+" m · Δ "+(+c.delta).toFixed(1)+"° · "+(c.sentido==="der"?"der.":"izq.");
+    if(largo){ t+=" · "+(c.tipo==="Espiral"?"TE ":"PC ")+fmtAbs(c.PC)+" → "+(c.tipo==="Espiral"?"ET ":"PT ")+fmtAbs(c.PT); if(c.pMax) t+=" · e máx "+(+c.pMax).toFixed(1)+" %"; }
+    return t; }
+  return "Tangente · "+q.next.id+" (R="+Math.round(q.next.R)+") en "+q.d.toFixed(0)+" m"; }
+function curvaVTxt(a){ for(var i=0;i<CURVV.length;i++){ var v=CURVV[i]; if(a>=v.PCV&&a<=v.PTV) return v.id+" "+v.tipo+" · L "+(+v.L).toFixed(0)+" m · K "+v.K; } return ""; }
+
 var hitosGroup=null;
 var HITO_COL={PI:0xff9f43, PC:0x3fb27f, PT:0xe5603e, OB:0x35c0d6};
 function buildHitos(on){
-  if(hitosGroup){ group.remove(hitosGroup);
-    hitosGroup.traverse(function(o){ if(o.geometry)o.geometry.dispose();
-      if(o.material){ if(o.material.map)o.material.map.dispose(); o.material.dispose(); } });
-    hitosGroup=null; }
-  if(!on || !DATA.hitos || !DATA.hitos.length) return;
+  if(hitosGroup){ group.remove(hitosGroup); disposeTree(hitosGroup); hitosGroup=null; }
+  if(!on || !Array.isArray(DATA.hitos) || !DATA.hitos.length) return;
   hitosGroup=new THREE.Group();
+  var P=[], C=[], S=[], hgt=3.2;
   DATA.hitos.forEach(function(h){
-    var w=toWorld(h.e,h.n,(h.z!=null?h.z:anchor.z));
-    var col=HITO_COL[h.t]||0xffffff, hgt=3.2;
-    var g=new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(w[0],w[1],w[2]),new THREE.Vector3(w[0],w[1]+hgt,w[2])]);
-    hitosGroup.add(new THREE.Line(g,new THREE.LineBasicMaterial({color:col})));
-    var sph=new THREE.Mesh(new THREE.SphereGeometry(0.35,10,8), new THREE.MeshBasicMaterial({color:col}));
-    sph.position.set(w[0],w[1]+hgt,w[2]); hitosGroup.add(sph);
-    var sp=labelSprite(h.label,col); sp.position.set(w[0],w[1]+hgt+0.95,w[2]); hitosGroup.add(sp);
+    if(!h||!isFinite(+h.e)||!isFinite(+h.n)) return;
+    var w=toWorld(+h.e,+h.n,anchor.z);
+    // sin cota propia: se toma la rasante del eje en su proyección (antes quedaba a la cota del ancla)
+    w[1] = (h.z!=null&&isFinite(+h.z)) ? (+h.z-anchor.z) : projFinish(projRange(w[0],w[2],null,null)).py;
+    var col=HITO_COL[h.t]||0xffffff, rgb=hex2rgb(col);
+    P.push(w[0],w[1],w[2], w[0],w[1]+hgt,w[2]); C.push(rgb[0],rgb[1],rgb[2], rgb[0],rgb[1],rgb[2]);
+    S.push([w[0],w[1]+hgt,w[2],col]);
+    var sp=labelSprite(h.label||h.t||"",col); sp.position.set(w[0],w[1]+hgt+0.95,w[2]); hitosGroup.add(sp);
   });
+  if(P.length) hitosGroup.add(segLines(P,C));
+  if(S.length){
+    var im=new THREE.InstancedMesh(new THREE.SphereGeometry(0.35,10,8), new THREE.MeshBasicMaterial({color:0xffffff}), S.length);
+    var mx=new THREE.Matrix4(), cc=new THREE.Color();
+    S.forEach(function(q,i){ mx.makeTranslation(q[0],q[1],q[2]); im.setMatrixAt(i,mx); im.setColorAt(i,cc.setHex(q[3])); });
+    im.instanceMatrix.needsUpdate=true; if(im.instanceColor) im.instanceColor.needsUpdate=true;
+    im.frustumCulled=false; hitosGroup.add(im);
+  }
   group.add(hitosGroup);
 }
 
 /* =====================================================================
-   [nav2] NAVEGACIÓN ROBUSTA
-   - Abscisa continua con ventana de seguimiento (no salta entre ramas de un zig-zag)
-   - Brújula absoluta (Android: deviceorientationabsolute · iOS: webkitCompassHeading)
-     fusionada con el giroscopio (suave y sin deriva)
-   - Corrección del signo del rumbo (antes la calibración duplicaba el error)
-   - Ancla GPS en abscisa conocida (quita el sesgo del GPS del celular)
-   - Auto-rumbo por GPS con rechazo de inversiones
-   - Modo "Mapa en vivo" (tipo ubicación en tiempo real: la vía fija, tú te mueves)
+   NAVEGACIÓN
    ===================================================================== */
-var d2r=Math.PI/180;
 function normAng(a){ while(a>Math.PI)a-=2*Math.PI; while(a<-Math.PI)a+=2*Math.PI; return a; }
-
-/* punto del eje más cercano a (x,z) mundo → índice (búsqueda global; solo para cotas) */
 function nearestIdx(x,z){
   var best=0,bd=Infinity;
   for(var i=0;i<Cw.length;i++){var dx=Cw[i][0]-x,dz=Cw[i][2]-z,dd=dx*dx+dz*dz;if(dd<bd){bd=dd;best=i;}}
@@ -459,11 +937,8 @@ function nearestIdx(x,z){
 function ejeAz(i){
   if(Cw.length<2) return 0;
   var a=Cw[Math.max(0,i-1)], b=Cw[Math.min(Cw.length-1,i+1)];
-  var dx=b[0]-a[0], dz=b[2]-a[2];           // world: +X Este, +Z Sur
-  return Math.atan2(dx,-dz);                 // -Z = Norte
+  return Math.atan2(b[0]-a[0],-(b[2]-a[2]));
 }
-
-/* ---------- abscisa continua ---------- */
 function fmtAbs1(m){
   if(!isFinite(m)) return "—";
   var s=m<0?"-":""; m=Math.abs(Math.round(m*10)/10);
@@ -477,7 +952,6 @@ function parseAbs(s){
   var v=parseFloat(s.replace(",","."));
   return isFinite(v)?v:null;
 }
-/* proyección de (x,z) sobre el segmento (i-1 → i) */
 function segProj(i,x,z){
   var ax=Cw[i-1][0], az=Cw[i-1][2], dx=Cw[i][0]-ax, dz=Cw[i][2]-az, L2=dx*dx+dz*dz;
   var t=L2>0?((x-ax)*dx+(z-az)*dz)/L2:0; if(t<0)t=0; else if(t>1)t=1;
@@ -492,16 +966,18 @@ function projRange(x,z,a0,a1){
   }
   return best;
 }
+function lerpArr(A,i,t){   // interpolación tolerante a nulos
+  var a=A[i-1], b=A[i]; if(a==null&&b==null) return null; if(a==null) return b; if(b==null) return a; return a+(b-a)*t; }
 function projFinish(b){
   var i=b.i;
-  return {px:b.px, pz:b.pz, py:Cw[i-1][1]+(Cw[i][1]-Cw[i-1][1])*b.t,
+  return {px:b.px, pz:b.pz, py:Cw[i-1][1]+(Cw[i][1]-Cw[i-1][1])*b.t, gy:TERw?lerpArr(TERw,i,b.t):null,
+          cf:CF?lerpArr(CF,i,b.t):null,
           idx:(b.t<0.5?i-1:i), abs:Sm[i-1]+(Sm[i]-Sm[i-1])*b.t, dist:Math.sqrt(b.d2), off:b.side};
 }
 function newTrk(){ return {idx:-1, lost:0}; }
-/* seguimiento con continuidad: busca solo cerca de la abscisa anterior;
-   salta a otra rama solo si 3 lecturas seguidas lo confirman */
+/* seguimiento con continuidad: busca solo cerca de la abscisa anterior; salta de rama solo si 3 lecturas lo confirman */
 function trackProject(x,z,trk,acc){
-  if(Cw.length<2) return {px:x,pz:z,py:(Cw[0]?Cw[0][1]:0),idx:0,abs:Sm[0]||0,dist:0,off:0};
+  if(Cw.length<2) return {px:x,pz:z,py:(Cw[0]?Cw[0][1]:0),gy:null,cf:null,idx:0,abs:Sm[0]||0,dist:0,off:0};
   var g=projRange(x,z,null,null), res=g;
   if(trk.idx>=0 && trk.idx<Cw.length){
     var a=Sm[trk.idx], W=Math.min(150, 35+2*(acc||0));
@@ -524,13 +1000,14 @@ function pointAtAbs(a,off){
   var i=lo, s0=Sm[i-1], s1=Sm[i], t=s1>s0?(a-s0)/(s1-s0):0; t=Math.max(0,Math.min(1,t));
   var ax=Cw[i-1][0], az=Cw[i-1][2], dx=Cw[i][0]-ax, dz=Cw[i][2]-az, L=Math.hypot(dx,dz)||1;
   off=off||0;
-  return {x:ax+dx*t+(-dz/L)*off, z:az+dz*t+(dx/L)*off, idx:(t<0.5?i-1:i)};
+  var y=Cw[i-1][1]+(Cw[i][1]-Cw[i-1][1])*t, gy=TERw?lerpArr(TERw,i,t):null;
+  return {x:ax+dx*t+(-dz/L)*off, z:az+dz*t+(dx/L)*off, y:y, gy:gy, idx:(t<0.5?i-1:i)};
 }
 
 /* ---------- encuadre ---------- */
 var midY=0;
 function frameAll(){
-  var xs=Cw.map(p=>p[0]), ys=Cw.map(p=>p[1]), zs=Cw.map(p=>p[2]);
+  var xs=Cw.map(function(p){return p[0]}), ys=Cw.map(function(p){return p[1]}), zs=Cw.map(function(p){return p[2]});
   var cx=(Math.min.apply(null,xs)+Math.max.apply(null,xs))/2;
   var cz=(Math.min.apply(null,zs)+Math.max.apply(null,zs))/2;
   midY=(Math.min.apply(null,ys)+Math.max.apply(null,ys))/2;
@@ -548,15 +1025,21 @@ var orbit={target:new THREE.Vector3(0,0,0), radius:60, theta:0.6, phi:0.9,
 var walk={pos:new THREE.Vector3(0,1.6,0), yaw:0, pitch:0,
   apply:function(){ camera.position.copy(this.pos);
     var q=new THREE.Euler(this.pitch,this.yaw,0,"YXZ"); camera.quaternion.setFromEuler(q);} };
-var ar={eye:1.6, yawOff:0, yawFine:0, calib:0, pitchOff:0, alpha:0,beta:0,gamma:0,orient:0,
-        active:false, listening:false, px:0,pz:0,py:0, idx:0, abs:0, off:0, dist:null};
+var ar={eye:1.6, dz:0, yawOff:0, yawFine:0, calib:0, pitchOff:0, alpha:0,beta:0,gamma:0,orient:0,
+        active:false, listening:false, px:0,pz:0,py:0,gy:null,cf:null, idx:0, abs:0, off:0, dist:null};
 var map={cx:0, cz:0, h:200, follow:true, panAcc:0};
-var obsTrk=newTrk(), walkTrk=newTrk(), obsKey=null;
+var obsTrk=newTrk(), walkTrk=newTrk(), obsKey=null, walkKey=null, walkR=null;
 
-/* ---- puntero (drag / pinch) ---- */
-var ptrs={}, lastDist=null;
-function down(e){ ptrs[e.pointerId]={x:e.clientX,y:e.clientY}; map.panAcc=0; }
-function up(e){ delete ptrs[e.pointerId]; lastDist=null; }
+/* ---- puntero (drag / pinch / toque) ---- */
+var ptrs={}, lastDist=null, gestMulti=false;
+function down(e){ ptrs[e.pointerId]={x:e.clientX,y:e.clientY}; map.panAcc=0; if(Object.keys(ptrs).length>=2) gestMulti=true; }
+function up(e){
+  var had=!!ptrs[e.pointerId];
+  delete ptrs[e.pointerId]; lastDist=null;
+  var left=Object.keys(ptrs).length;
+  if(had && !left && !gestMulti && mode==="map" && measure.on && map.panAcc<8 && e.type==="pointerup") measureTap(e.clientX,e.clientY);
+  if(!left) gestMulti=false;
+}
 function move(e){
   var p=ptrs[e.pointerId]; if(!p) return;
   var dx=e.clientX-p.x, dy=e.clientY-p.y; p.x=e.clientX; p.y=e.clientY;
@@ -565,19 +1048,19 @@ function move(e){
     var a=ptrs[ids[0]], b=ptrs[ids[1]], dist=Math.hypot(a.x-b.x,a.y-b.y);
     if(lastDist!=null){ var dd=dist-lastDist;
       if(mode==="orbit"){ orbit.radius=Math.max(3,orbit.radius-dd*0.15); orbit.apply(); }
-      else if(mode==="walk"){ var fwd=new THREE.Vector3(0,0,-1).applyQuaternion(camera.quaternion); walk.pos.addScaledVector(fwd, dd*0.15); walk.apply(); }
+      else if(mode==="walk"){ if(play.on) playSet(false); var fwd=new THREE.Vector3(0,0,-1).applyQuaternion(camera.quaternion); fwd.y=0; fwd.normalize(); walk.pos.addScaledVector(fwd, dd*0.15); walk.apply(); }
       else if(mode==="map"){ map.h=Math.max(20,Math.min(20000,map.h*(1-dd*0.004))); }
     }
     lastDist=dist; return;
   }
   if(mode==="orbit"){ orbit.theta-=dx*0.006; orbit.phi=Math.max(0.05,Math.min(1.55,orbit.phi-dy*0.006)); orbit.apply(); }
-  else if(mode==="walk"){ walk.yaw-=dx*0.005; walk.pitch=Math.max(-1.4,Math.min(1.4,walk.pitch-dy*0.005)); walk.apply(); }
+  else if(mode==="walk"){ if(play.on) playSet(false); walk.yaw-=dx*0.005; walk.pitch=Math.max(-1.4,Math.min(1.4,walk.pitch-dy*0.005)); walk.apply(); }
   else if(mode==="map"){
     map.panAcc+=Math.abs(dx)+Math.abs(dy);
     if(map.follow && map.panAcc<12) return;           // evita soltar el seguimiento por un toque
-    var mpp=2*map.h*Math.tan(camera.fov*Math.PI/360)/innerHeight;
+    var mpp=mapMpp();
     map.cx-=dx*mpp; map.cz-=dy*mpp;
-    if(map.follow){ map.follow=false; $("#centerBtn").classList.remove("hide"); }
+    if(map.follow){ map.follow=false; updFabs(); }
   }
   else if(mode==="ar" && !ar.active){ ar.yawOff-=dx*0.006; ar.pitchOff=Math.max(-1.3,Math.min(1.3,ar.pitchOff-dy*0.006)); }
 }
@@ -586,34 +1069,41 @@ renderer.domElement.addEventListener("pointermove",move);
 addEventListener("pointerup",up); addEventListener("pointercancel",up);
 renderer.domElement.addEventListener("wheel",function(e){
   if(mode==="orbit"){ orbit.radius=Math.max(3,orbit.radius+e.deltaY*0.05); orbit.apply(); }
-  else if(mode==="walk"){ var fwd=new THREE.Vector3(0,0,-1).applyQuaternion(camera.quaternion); walk.pos.addScaledVector(fwd,-e.deltaY*0.05); walk.apply(); }
+  else if(mode==="walk"){ var fwd=new THREE.Vector3(0,0,-1).applyQuaternion(camera.quaternion); fwd.y=0; fwd.normalize(); walk.pos.addScaledVector(fwd,-e.deltaY*0.05); walk.apply(); }
   else if(mode==="map"){ map.h=Math.max(20,Math.min(20000,map.h*(1+e.deltaY*0.001))); }
 },{passive:true});
 
 /* ---- teclado (recorrer en PC) ---- */
 var keys={};
-addEventListener("keydown",function(e){ if(e.target&&(e.target.tagName==="INPUT"||e.target.tagName==="SELECT")) return; keys[(e.key||"").toLowerCase()]=1; });
+function isField(t){ return t&&(t.tagName==="INPUT"||t.tagName==="SELECT"||t.tagName==="TEXTAREA"); }
+addEventListener("keydown",function(e){ if(isField(e.target)) return; keys[(e.key||"").toLowerCase()]=1; });
 addEventListener("keyup",function(e){ keys[(e.key||"").toLowerCase()]=0; });
 addEventListener("blur",function(){ keys={}; });
 function walkStep(){
   if(mode!=="walk") return;
-  var sp=0.4, f=new THREE.Vector3(0,0,-1).applyQuaternion(camera.quaternion);
+  if(play.on && (keys["w"]||keys["s"]||keys["a"]||keys["d"])) playSet(false);
+  var sp=keys["shift"]?1.2:0.4, f=new THREE.Vector3(0,0,-1).applyQuaternion(camera.quaternion);
   var r=new THREE.Vector3(1,0,0).applyQuaternion(camera.quaternion); f.y=0;r.y=0;f.normalize();r.normalize();
   if(keys["w"])walk.pos.addScaledVector(f,sp); if(keys["s"])walk.pos.addScaledVector(f,-sp);
   if(keys["a"])walk.pos.addScaledVector(r,-sp); if(keys["d"])walk.pos.addScaledVector(r,sp);
-  if(keys["w"]||keys["s"]||keys["a"]||keys["d"]) walk.apply();
+}
+/* Recorrer: la cámara sigue la rasante (antes quedaba a la cota del K0) */
+function walkFollow(){
+  var k=walk.pos.x.toFixed(2)+","+walk.pos.z.toFixed(2);
+  if(k!==walkKey || !walkR){ walkKey=k; walkR=trackProject(walk.pos.x,walk.pos.z,walkTrk,0); }
+  walk.pos.y=walkR.py+ar.eye; walk.apply();
+  return walkR;
 }
 
 /* ---- sensores de orientación ---- */
 var zee=new THREE.Vector3(0,0,1), q1=new THREE.Quaternion(-Math.sqrt(0.5),0,0,Math.sqrt(0.5)), q0=new THREE.Quaternion();
 var Yaxis=new THREE.Vector3(0,1,0), _tq=new THREE.Quaternion(), _tqA=new THREE.Quaternion(), _tqY=new THREE.Quaternion();
-var _vf=new THREE.Vector3(), _vu=new THREE.Vector3();
+var _vf=new THREE.Vector3(), _vu=new THREE.Vector3(), _eu=new THREE.Euler();
 function quatFrom(al,be,ga,or,out){
-  out.setFromEuler(new THREE.Euler((be||0)*d2r,(al||0)*d2r,-(ga||0)*d2r,"YXZ"));
+  out.setFromEuler(_eu.set((be||0)*d2r,(al||0)*d2r,-(ga||0)*d2r,"YXZ"));
   out.multiply(q1); out.multiply(q0.setFromAxisAngle(zee,-(or||0)*d2r)); return out;
 }
 function gyroQuat(out){ return quatFrom(ar.alpha,ar.beta,ar.gamma,ar.orient,out); }
-/* rumbo (horario desde -Z) de hacia dónde apunta el equipo: cámara si está vertical, borde superior si está plano */
 function headingOfQuat(q){
   var f=_vf.set(0,0,-1).applyQuaternion(q);
   if(Math.abs(f.y)<0.7) return Math.atan2(f.x,-f.z);
@@ -621,15 +1111,24 @@ function headingOfQuat(q){
   return f.y<0 ? Math.atan2(u.x,-u.z) : Math.atan2(-u.x,u.z);
 }
 function screenAngle(){ return (screen.orientation&&typeof screen.orientation.angle==="number")?screen.orientation.angle:(window.orientation||0); }
+/* rumbo de cuadrícula hacia donde apunta el equipo (null si no hay sensores) */
+function devHeading(){
+  if(xr.on){ if(!xr.aligned) return null;            // AR Pro: rumbo desde ARCore, pasado al sistema del proyecto
+    var f=_vf.set(0,0,-1).applyQuaternion(xr.camQ), w=rotXZ(-xr.phi,f.x,f.z); return Math.atan2(w[0],-w[1]); }
+  return ar.active ? normAng(headingOfQuat(gyroQuat(_tq))+yawEff()) : null; }
 
-/* fuente de rumbo + declinación (persistentes) */
-function lsGet(k,def){ try{ var v=localStorage.getItem(k); return v==null?def:v; }catch(e){ return def; } }
-function lsSet(k,v){ try{ localStorage.setItem(k,v); }catch(e){} }
-var hdgSrc=lsGet("viaAR_hdgSrc","compass"); if(["compass","gps","manual"].indexOf(hdgSrc)<0) hdgSrc="compass";
+var hdgSrc=lsGet("viaAR_hdgSrc","compass"); if(["compass","manual"].indexOf(hdgSrc)<0) hdgSrc="compass";   // "GPS al caminar" retirado
 var declDeg=parseFloat(lsGet("viaAR_decl","0")); if(!isFinite(declDeg)) declDeg=0;
 $("#hdgSrc").value=hdgSrc; $("#decl").value=declDeg;
+function updDeclHint(){
+  var ll=anchor?(anchor.lat!=null?[+anchor.lon,+anchor.lat]:toLL(anchor.e,anchor.n)):null;
+  var loc=ll?(" para "+ll[1].toFixed(3)+", "+ll[0].toFixed(3)):"";
+  var h=$("#declHint");
+  if(declDeg===0){ h.className="hint wa";
+    h.innerHTML="⚠ Declinación en 0°: la brújula entra girada unos grados. Usa 🎯 Calibrar, o ingrésala en avanzados (<a href='https://www.ngdc.noaa.gov/geomag/calculators/magcalc.shtml' target='_blank' rel='noopener'>consultar"+loc+"</a>)."; }
+  else { h.className="hint"; h.textContent="Declinación "+declDeg.toFixed(1)+"° aplicada ("+(declDeg<0?"Oeste":"Este")+")."; }
+}
 
-/* fusión brújula + giroscopio: el giroscopio da suavidad, la brújula quita la deriva */
 var comp={ema:null, rej:0, last:0, hasAbsEvt:false};
 function compassRecent(){ return comp.last>0 && performance.now()-comp.last<2500; }
 function compassFuse(hNorth){
@@ -654,7 +1153,7 @@ function onOrient(e){
     var fy=_vf.set(0,0,-1).applyQuaternion(gyroQuat(_tq)).y;          // iOS: evitar la zona ambigua (~35°-58°)
     if(Math.abs(fy)<0.55 || Math.abs(fy)>0.85) compassFuse(e.webkitCompassHeading*d2r);
   } else if(e.absolute===true && !comp.hasAbsEvt){
-    compassFuse(headingOfQuat(gyroQuat(_tqA)));
+    compassFuse(headingOfQuat(quatFrom(e.alpha,e.beta,e.gamma,screenAngle(),_tqA)));
   }
 }
 function onAbs(e){
@@ -674,7 +1173,7 @@ function startGyro(quiet){
     clearTimeout(compCheckT);
     compCheckT=setTimeout(function(){
       if(mode!=="ar" || !ar.active || hdgSrc!=="compass" || compassRecent()) return;
-      hdgSrc="manual"; $("#hdgSrc").value="manual"; lsSet("viaAR_hdgSrc","manual"); ar.calib=0;
+      hdgSrc="manual"; $("#hdgSrc").value="manual"; lsSet("viaAR_hdgSrc","manual"); ar.calib=0; updDeclRow();
       toast("Este equipo no entrega brújula. Rumbo pasado a Manual: apunta a lo largo de la vía y toca 🎯 Calibrar.",6000);
     },3500);
   }
@@ -693,20 +1192,32 @@ function stopGyro(){
 function srcName(){ return hdgSrc==="compass"?"Brújula":hdgSrc==="gps"?"GPS al caminar":"Manual"; }
 
 /* ---- observador ---- */
-function yawEff(){ return ar.yawOff + ar.calib + ar.yawFine; }   // azimut de cuadrícula que se suma al rumbo del equipo
-function obsApply(r){ ar.idx=r.idx; ar.abs=r.abs; ar.off=r.off; ar.dist=r.dist; ar.py=r.py; }
+function yawEff(){ return ar.yawOff + ar.calib + ar.yawFine; }
+function obsApply(r){ ar.idx=r.idx; ar.abs=r.abs; ar.off=r.off; ar.dist=r.dist; ar.py=r.py; ar.gy=r.gy; ar.cf=r.cf; }
 function obsUpdate(){
   if(Cw.length<2) return;
   var k=ar.px.toFixed(3)+","+ar.pz.toFixed(3); if(k===obsKey) return; obsKey=k;
   obsApply(trackProject(ar.px,ar.pz,obsTrk,gpsWatch!=null?gpsLastAcc:0));
 }
+/* campo visual: el deslizador es el del lado largo de la pantalla (la cámara del celular llena ese lado) */
+var fovLong=parseFloat(lsGet("viaAR_fov","65")); if(!(fovLong>=35&&fovLong<=95)) fovLong=65;
+$("#fov").value=fovLong; $("#fovV").textContent=fovLong+"°";
+function applyFov(){
+  var f=MAPFOV;
+  if(mode==="ar"){ var asp=innerWidth/innerHeight;
+    f = asp<=1 ? fovLong : 2*Math.atan(Math.tan(fovLong*d2r/2)/asp)/d2r; }
+  if(Math.abs(camera.fov-f)>1e-3){ camera.fov=f; camera.updateProjectionMatrix(); }
+}
+var arSm={x:null,z:null,t:0};
 function arApply(){
   obsUpdate();
-  camera.position.set(ar.px, ar.py+ar.eye, ar.pz);
+  var base=(ar.gy!=null?ar.gy:ar.py), now=performance.now(), dt=Math.min(0.25,(now-arSm.t)/1000); arSm.t=now;
+  if(arSm.x==null || Math.hypot(ar.px-arSm.x,ar.pz-arSm.z)>30){ arSm.x=ar.px; arSm.z=ar.pz; }
+  else { var k=1-Math.exp(-dt/0.6); arSm.x+=(ar.px-arSm.x)*k; arSm.z+=(ar.pz-arSm.z)*k; }   // se desliza ~0,6 s en vez de saltar
+  camera.position.set(arSm.x, base+ar.dz+ar.eye, arSm.z);
   var ye=yawEff();
   if(ar.active){
     gyroQuat(_tq);
-    // [nav2] signo corregido: rotar -ye alrededor de Y suma +ye al azimut horario
     camera.quaternion.copy(_tqY.setFromAxisAngle(Yaxis,-ye)).multiply(_tq);
   } else {
     var cel=Math.cos(ar.pitchOff), sel=Math.sin(ar.pitchOff);
@@ -720,21 +1231,54 @@ var hudCache={};
 function setTxt(id,t,col){ var el=document.getElementById(id); if(!el) return;
   if(hudCache[id]!==t){ el.textContent=t; hudCache[id]=t; }
   if(col!==undefined && el.style.color!==col) el.style.color=col; }
+function fmtCf(v){ if(v==null||!isFinite(v)) return "—"; if(Math.abs(v)<0.05) return "0.0 m (a nivel)";
+  return (v>0?"+":"−")+Math.abs(v).toFixed(1)+" m "+(v>0?"corte":"relleno"); }
+/* posición actual del usuario para distancias (null si no hay) */
+function curPos(){
+  if(mode==="walk") return {x:camera.position.x,z:camera.position.z,acc:0};
+  if(mode==="ar") return {x:ar.px,z:ar.pz,acc:gpsFix?(gpsLastAcc||0):0};
+  if(mode==="map" && gpsFix) return {x:ar.px,z:ar.pz,acc:gpsLastAcc||0};
+  return null;
+}
+var ARROWS=["↑","↗","→","↘","↓","↙","←","↖"];
 function hudUpdate(o){
   o=o||ar;
-  var hasPos=(mode==="walk") || (mode==="ar") || (mode==="map" && gpsFix);
+  var hasPos=(mode==="walk") || (mode==="ar" && (!xr.on||xr.aligned)) || (mode==="map" && gpsFix);
+  if(xr.on) setTxt("hbGps", gpsFix&&xr.gpsD!=null ? ("Δ GPS "+xr.gpsD.toFixed(1)+" m") : (gpsFix?"±"+(gpsLastAcc||0).toFixed(0)+" m":"—"),
+                   xr.gpsD!=null&&xr.gpsD>Math.max(10,2*(gpsLastAcc||0))?"#e0a43b":"");
   setTxt("hbAbs", (hasPos&&Sm.length)?fmtAbs1(o.abs):"—");
   setTxt("hbLat", (hasPos&&o.dist!=null)?(o.dist<0.3?"sobre el eje":(o.dist.toFixed(1)+" m "+(o.off>=0?"Der":"Izq"))):"—");
   setTxt("hbAz", Cw.length?(((ejeAz(o.idx)/d2r)+360)%360).toFixed(0)+"°":"—");
+  if(CURV.length) setTxt("hbCur", hasPos?curvaTxt(o.abs,false):"—");
+  if(CF) setTxt("hbCf", hasPos?fmtCf(o.cf):"—", hasPos&&o.cf!=null?(o.cf>0?"#d9a066":"#7fb4e6"):"");
   var hs;
   if(hdgSrc==="compass") hs=compassRecent()?"Brújula ✓":(ar.active?"Brújula: sin señal":"Brújula");
   else if(hdgSrc==="gps") hs=gh.ema!=null?"GPS ✓":"GPS: camina…";
   else hs="Manual";
-  setTxt("hbHdg", hs, (hdgSrc==="compass"&&ar.active&&!compassRecent())||(hdgSrc==="gps"&&gh.ema==null)?"#e0a43b":"");
+  if(hdgSrc==="compass" && declDeg===0 && ar.calib===0 && (mode==="ar"||mode==="map")) hs+=" (decl. 0°)";
+  setTxt("hbHdg", hs, (hdgSrc==="compass"&&ar.active&&!compassRecent())||(hdgSrc==="gps"&&gh.ema==null)||(hdgSrc==="compass"&&declDeg===0&&ar.calib===0)?"#e0a43b":"");
   if(gpsCorr.on){
     var mins=Math.floor((Date.now()-gpsCorr.t)/60000), mag=Math.hypot(gpsCorr.dx,gpsCorr.dz);
     setTxt("hbAnc", mag.toFixed(1)+" m · "+mins+" min", mins>=30?"#e0a43b":"#3fb27f");
   } else setTxt("hbAnc","—","");
+  // objetivo
+  if(tgt){
+    var p=curPos(), txt;
+    if(!p) txt=tgt.label+" · sin posición (usa Mapa/AR con GPS o Recorrer)";
+    else{
+      var dx=tgt.x-p.x, dz=tgt.z-p.z, dist=Math.hypot(dx,dz), az=Math.atan2(dx,-dz);
+      if(dist<=Math.max(1.5,(p.acc||0)*0.5)) txt="✓ "+tgt.label+" · estás en el punto"+(p.acc?(" (±"+p.acc.toFixed(0)+" m)"):"");
+      else{
+        var h=(mode==="walk")?-walk.yaw:devHeading(), dir;
+        if(h!=null){ var rel=normAng(az-h); dir=ARROWS[((Math.round(rel/(Math.PI/4))%8)+8)%8]+" "; }
+        else dir="Az "+(((az/d2r)+360)%360).toFixed(0)+"° ";
+        txt=tgt.label+" · "+dir+dist.toFixed(1)+" m";
+        if(hasPos && tgt.abs!=null){ var dA=tgt.abs-o.abs, dO=tgt.off-o.off;
+          txt+=" · ΔK "+(dA>=0?"+":"−")+Math.abs(dA).toFixed(1)+" · lat "+Math.abs(dO).toFixed(1)+(dO>=0?" Der":" Izq"); }
+      }
+    }
+    setTxt("hbTgt",txt);
+  }
 }
 
 /* colocar observador en un índice del eje, desplazado 'off' m a la derecha, mirando al eje */
@@ -742,10 +1286,10 @@ function paradoEn(i, off){
   off=off==null?8:off;
   i=Math.max(0,Math.min(Cw.length-1,i));
   var az=ejeAz(i);
-  var dxr=Math.cos(az), dzr=Math.sin(az);     // derecha del eje (world)
+  var dxr=Math.cos(az), dzr=Math.sin(az);
   ar.px=Cw[i][0]+dxr*off; ar.py=Cw[i][1]; ar.pz=Cw[i][2]+dzr*off;
   obsTrk=newTrk(); obsTrk.idx=i; obsKey=null; ar.idx=i;
-  ar.yawOff=Math.atan2(Cw[i][0]-ar.px, -(Cw[i][2]-ar.pz));   // [nav2] mirar hacia el eje (antes quedaba mirando al Oeste)
+  ar.yawOff=Math.atan2(Cw[i][0]-ar.px, -(Cw[i][2]-ar.pz));
   ar.pitchOff=0;
 }
 
@@ -753,8 +1297,9 @@ function paradoEn(i, off){
 $("#calib").onclick=function(){
   if(!Cw.length) return;
   obsUpdate();
-  var want=ejeAz(ar.idx);                 // sentido de abscisas crecientes
+  var want=ejeAz(ar.idx);
   ar.yawFine=0; $("#yawFine").value=0; $("#yawFineV").textContent="0°";
+  ar.calibrated=true;
   if(!ar.active){ ar.calib=0; ar.yawOff=want; }
   else{
     var cur=headingOfQuat(gyroQuat(_tq));
@@ -769,8 +1314,10 @@ $("#calib").onclick=function(){
   }
   toast("Rumbo calibrado ✓ (alineado al eje, sentido de abscisas crecientes)",2600);
 };
+function updDeclRow(){ var c=hdgSrc==="compass"; $("#declRow").style.display=c?"":"none"; $("#declHint").style.display=c?"":"none"; }
+updDeclRow();
 $("#hdgSrc").onchange=function(){
-  hdgSrc=this.value; lsSet("viaAR_hdgSrc",hdgSrc); ar.calib=0; ghReset();
+  hdgSrc=this.value; updDeclRow(); lsSet("viaAR_hdgSrc",hdgSrc); ar.calib=0; ghReset();
   if(hdgSrc==="compass" && comp.ema!=null) ar.yawOff=comp.ema;
   toast(hdgSrc==="compass"?"Rumbo por brújula (automático). Si queda girado, 🎯 Calibrar una vez."
        :hdgSrc==="gps"?"Rumbo por GPS: camina derecho mirando al frente ~10 m. No sirve estando quieto."
@@ -779,7 +1326,7 @@ $("#hdgSrc").onchange=function(){
 $("#decl").onchange=function(){
   var v=parseFloat(String(this.value).replace(",","."));
   if(!isFinite(v)||Math.abs(v)>30){ v=0; this.value=0; }
-  declDeg=v; lsSet("viaAR_decl",String(v)); comp.ema=null; ar.calib=0;
+  declDeg=v; lsSet("viaAR_decl",String(v)); comp.ema=null; ar.calib=0; updDeclHint();
   toast("Declinación "+v.toFixed(1)+"° aplicada.",2200);
 };
 
@@ -791,40 +1338,43 @@ var gh={anchor:null, ema:null, pend:null, pendN:0, rej:0};
 function ghReset(){ gh={anchor:null, ema:null, pend:null, pendN:0, rej:0}; }
 function gpsColor(acc){ return acc<=5?"#3fb27f":acc<=12?"#e0a43b":"#e5603e"; }
 
-/* posición del observador a partir del GPS filtrado + corrección del ancla */
 function applyGpsPos(){
-  if(!gpsEMA) return;
+  if(!gpsEMA) return null;
   var x=gpsEMA.x+(gpsCorr.on?gpsCorr.dx:0), z=gpsEMA.z+(gpsCorr.on?gpsCorr.dz:0);
+  if(xr.on){   // en AR Pro manda el seguimiento visual; el GPS solo sirve de control de deriva
+    if(xr.aligned) xr.gpsD=Math.hypot(x-ar.px,z-ar.pz);
+    if(!gpsFix){ gpsFix=true; updFabs(); }
+    return {x:x,z:z};
+  }
   var r=trackProject(x,z,obsTrk,gpsLastAcc||0);
   if(snapAxis){ ar.px=r.px; ar.pz=r.pz; } else { ar.px=x; ar.pz=z; }
   obsApply(r); obsKey=ar.px.toFixed(3)+","+ar.pz.toFixed(3);
-  if(!gpsFix){ gpsFix=true; if(mode==="map" && map.follow) map.h=Math.min(map.h,250); }
+  if(!gpsFix){ gpsFix=true; if(mode==="map" && map.follow) map.h=Math.min(map.h,250); updFabs(); }
   return {x:x,z:z};
 }
 function gpsUpdate(pos){
   if(!DATA||!DATA._ok) return;
   var lat=pos.coords.latitude, lon=pos.coords.longitude, acc=pos.coords.accuracy||99;
-  if(!(DATA.crs && DATA.crs.proj && window.proj4)){
-    toast("El JSON no trae CRS/proj — no se puede ubicar por GPS. Usa 'Recorrer' manual.",5200); stopGps(); return;
-  }
-  var en; try{ en=proj4('+proj=longlat +datum=WGS84 +no_defs', DATA.crs.proj, [lon,lat]); }
+  if(!P4){ toast("El JSON no trae CRS/proj — no se puede ubicar por GPS. Usa 'Recorrer' manual.",5200); stopGps(); return; }
+  var en; try{ en=P4.inverse([lon,lat]); }
   catch(err){ toast("No se pudo proyectar el GPS al CRS del proyecto.",4200); stopGps(); return; }
   var w=toWorld(en[0],en[1],anchor.z);
   if(!isFinite(w[0])||!isFinite(w[2])) return;
   gpsLastAcc=acc;
   setTxt("hbGps","±"+acc.toFixed(0)+" m",gpsColor(acc));
-  if(anc) anc.samples.push({x:w[0],z:w[2],acc:acc});
+  var smp={x:w[0],z:w[2],acc:acc,alt:(pos.coords.altitude!=null&&isFinite(pos.coords.altitude))?pos.coords.altitude:null};
+  if(anc) anc.samples.push(smp);
+  if(mk.collect) mk.samples.push(smp);
   if(acc>60){
     if(Date.now()-lastBadAccToast>10000){ lastBadAccToast=Date.now(); toast("GPS muy impreciso (±"+acc.toFixed(0)+" m): no se mueve la posición. Busca cielo abierto.",4000); }
     return;
   }
-  // suavizado: mejor precisión → sigue más rápido; peor → más filtrado; en movimiento → menos retardo
   var a=acc<=5?0.55:acc<=12?0.30:0.15, spd=pos.coords.speed;
   if(spd!=null && spd>=2) a=Math.max(a,0.75); else if(spd!=null && spd>=0.8) a=Math.max(a,0.5);
   if(!gpsEMA){ gpsEMA={x:w[0],z:w[2]}; gpsJumpN=0; } else {
     var dx=w[0]-gpsEMA.x, dz=w[2]-gpsEMA.z, d=Math.hypot(dx,dz);
     var cap=Math.max(acc*2,12,(spd!=null&&spd>0?spd*3:0));
-    if(d>cap){                                  // salto: se ignora salvo que 3 lecturas seguidas lo confirmen
+    if(d>cap){
       if(++gpsJumpN<3) return;
       gpsEMA={x:w[0],z:w[2]}; gpsJumpN=0;
     } else { gpsJumpN=0; gpsEMA.x+=dx*a; gpsEMA.z+=dz*a; }
@@ -832,16 +1382,15 @@ function gpsUpdate(pos){
   var p=applyGpsPos();
   if(hdgSrc==="gps" && ar.active && p) gpsHeading(pos,p.x,p.z,acc);
 }
-/* auto-rumbo por GPS con rechazo de inversiones */
 function gpsHeading(pos,x,z,acc){
   var sp=pos.coords.speed, hd=pos.coords.heading, conv=(DATA&&DATA._conv)||0, hT=null;
-  if(sp!=null && !(sp>=0)) sp=null;                       // iOS entrega -1 si no es válido
-  if(sp!=null && sp<0.3) return;                          // quieto: no hay rumbo de marcha
+  if(sp!=null && !(sp>=0)) sp=null;
+  if(sp!=null && sp<0.3) return;
   if(sp!=null && sp>=0.8 && hd!=null && isFinite(hd) && hd>=0){ hT=hd*d2r+conv; gh.anchor={x:x,z:z}; }
   else{
     if(!gh.anchor){ gh.anchor={x:x,z:z}; return; }
     var mx=x-gh.anchor.x, mz=z-gh.anchor.z, d=Math.hypot(mx,mz);
-    if(d<Math.max(6,1.2*acc)) return;                     // desplazamiento menor que el ruido → no confiable
+    if(d<Math.max(6,1.2*acc)) return;
     hT=Math.atan2(mx,-mz); gh.anchor={x:x,z:z};
   }
   var want=normAng(hT-headingOfQuat(gyroQuat(_tq)));
@@ -851,12 +1400,12 @@ function gpsHeading(pos,x,z,acc){
     if(gh.pendN>=2){ gh.ema=gh.pend; gh.rej=0; toast("Rumbo por GPS fijado ✓",2200); }
   } else {
     var df=normAng(want-gh.ema);
-    if(Math.abs(df)>1.05){ if(++gh.rej>=4){ gh.ema=want; gh.rej=0; } }   // salto >60°: se exige confirmación (evita la vía invertida)
+    if(Math.abs(df)>1.05){ if(++gh.rej>=4){ gh.ema=want; gh.rej=0; } }
     else { gh.rej=0; gh.ema=normAng(gh.ema+df*0.25); }
   }
   if(gh.ema!=null) ar.yawOff=gh.ema;
 }
-/* [gpsperm] diagnóstico y ayuda de permisos de ubicación */
+/* ayuda de permisos de ubicación */
 var UA=navigator.userAgent||"", isIOS=/iPhone|iPad|iPod/i.test(UA)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);
 var inApp=/FBAN|FBAV|Instagram|WhatsApp|Line\/|; wv\)|GSA\//i.test(UA);
 function gpsHelp(kind){
@@ -871,7 +1420,7 @@ function gpsHelp(kind){
     t="📡 La ubicación del teléfono está apagada";
     h=isIOS?"<ol><li><b>Ajustes → Privacidad y seguridad → Localización</b> → activar.</li><li>En esa lista, <b>Safari (Sitios web Safari)</b> → <b>Al usar la app</b> y <b>Ubicación exacta</b> activada.</li></ol>"
            :"<ol><li>Baja la barra de notificaciones y activa <b>Ubicación</b>.</li><li>Si pregunta, activa <b>Precisión de ubicación de Google</b> (mejor señal).</li></ol>";
-  } else {   // denied
+  } else {
     t="🚫 El navegador tiene bloqueado el GPS para esta página";
     h=(isIOS
       ? "<p><b>iPhone / iPad (Safari):</b></p><ol><li>Toca <b>aA</b> en la barra de dirección → <b>Configuración del sitio web</b> → <b>Ubicación: Permitir</b>.</li><li>Si no aparece: <b>Ajustes → Privacidad y seguridad → Localización → Sitios web Safari → Al usar la app</b>, con <b>Ubicación exacta</b> activada.</li><li>Recarga la página.</li></ol>"
@@ -883,10 +1432,11 @@ function gpsHelp(kind){
 $("#gpsHelpClose").onclick=function(){ $("#gpsHelp").classList.add("hide"); };
 $("#gpsHelpRetry").onclick=function(){ $("#gpsHelp").classList.add("hide"); stopGps(); startGps(); };
 function startGps(){
+  if(!P4){ toast("El JSON no trae un CRS válido: no hay GPS. Usa 'Recorrer' manual.",4500); return; }
   if(!navigator.geolocation){ toast("Este navegador no expone GPS. Usa Chrome (Android) o Safari (iPhone).",5000); return; }
   if(gpsWatch!=null) return;
   if(!window.isSecureContext){ gpsHelp("insecure"); return; }
-  if(inApp){ gpsHelp("inapp"); }                      // se intenta igual; si falla, ya quedó explicado
+  if(inApp){ gpsHelp("inapp"); }
   if(navigator.permissions && navigator.permissions.query){
     navigator.permissions.query({name:"geolocation"}).then(function(st){
       if(st.state==="denied"){ stopGps(); gpsHelp("denied"); }
@@ -898,34 +1448,38 @@ function startGps(){
     function(err){
       if(err && err.code===1){ stopGps(); gpsHelp(inApp?"inapp":"denied"); return; }
       if(err && err.code===2 && !gpsFix){ gpsOffN=(gpsOffN||0)+1; if(gpsOffN===2) gpsHelp("off"); }
-      setTxt("hbGps", gpsFix?"sin lectura…":"buscando…", "#e0a43b");            // timeout: sigue intentando, sin ruido
+      setTxt("hbGps", gpsFix?"sin lectura…":"buscando…", "#e0a43b");
     },
     {enableHighAccuracy:true, maximumAge:1000, timeout:15000});
-  $("#gps").textContent="⏸ Detener seguimiento"; $("#gps").classList.add("warn");
+  $("#gps").textContent="⏸ Detener GPS"; $("#gps").classList.add("warn");
+  wakeOn();
 }
 function stopGps(){
   if(gpsWatch!=null){ navigator.geolocation.clearWatch(gpsWatch); gpsWatch=null; }
   cancelAnchor();
+  if(mk.collect) markGpsDone();
   gpsFix=false; gpsEMA=null;
-  $("#gps").textContent="📍 Seguir con GPS"; $("#gps").classList.remove("warn");
+  $("#gps").textContent="📍 Seguir GPS"; $("#gps").classList.remove("warn");
   setTxt("hbGps","—","");
+  if(mode!=="ar") wakeOff();
+  updFabs();
 }
 $("#gps").onclick=function(){ if(gpsWatch==null) startGps(); else stopGps(); };
 $("#snap").onclick=function(){
   snapAxis=!snapAxis;
-  this.textContent="🧲 Pegar al eje: "+(snapAxis?"ON":"OFF");
+  this.textContent="🧲 Al eje: "+(snapAxis?"ON":"OFF");
   this.classList.toggle("warn",snapAxis);
   applyGpsPos();
   toast(snapAxis?"Pegado al eje ON: la posición se proyecta sobre el eje (la abscisa sigue siendo continua)."
                 :"Pegado al eje OFF: posición GPS (corregida por el ancla si existe).",4200);
 };
 
-/* ---------- ancla: quitar el sesgo del GPS en un punto conocido ---------- */
+/* ---------- ancla ---------- */
 var ANC_MS=8000, ancTick=null;
 function cancelAnchor(){
   if(anc){ clearTimeout(anc.timer); anc=null; }
   clearInterval(ancTick); ancTick=null;
-  var b=$("#ancBtn"); b.disabled=false; b.textContent="📌 Anclar aquí (quieto 8 s)";
+  var b=$("#ancBtn"); b.disabled=false; b.textContent=P4?"📌 Anclar (8 s)":"📌 Ubicarme";
 }
 $("#ancAbs").onfocus=function(){ this.placeholder=(Sm.length&&(gpsFix||mode==="ar"))?("aquí ≈ "+fmtAbs(Math.max(Sm[0],Math.round(ar.abs)))):"K0+250 o 250"; };
 $("#ancBtn").onclick=function(){
@@ -935,32 +1489,42 @@ $("#ancBtn").onclick=function(){
   var off=parseFloat(String($("#ancOff").value||"0").replace(",","."))||0;
   var tg=pointAtAbs(a,off);
   if(!tg){ toast("Abscisa fuera del tramo ("+fmtAbs1(Sm[0])+" a "+fmtAbs1(Sm[Sm.length-1])+").",4500); return; }
-  if(!(DATA.crs&&DATA.crs.proj)){ toast("El JSON no trae CRS: no hay GPS que anclar.",4500); return; }
+  if(!P4){   // sin coordenadas: te ubica directamente en esa abscisa (reemplaza las flechas de antes)
+    ar.px=tg.x; ar.pz=tg.z; obsTrk=newTrk(); obsKey=null; arSm.x=null; ar.yawOff=ejeAz(tg.idx); ar.pitchOff=0;
+    toast("📌 Ubicado en "+fmtAbs1(a)+(off?(" · "+Math.abs(off).toFixed(1)+" m "+(off>0?"Der":"Izq")):"")+", mirando hacia abscisas crecientes.",4000); return; }
   if(gpsWatch==null) startGps();
+  if(gpsWatch==null) return;
   anc={target:tg, abs:a, off:off, samples:[], t0:Date.now()};
   anc.timer=setTimeout(finishAnchor,ANC_MS);
   var b=this; b.disabled=true;
   ancTick=setInterval(function(){ if(!anc) return;
     var s=Math.max(0,Math.ceil((ANC_MS-(Date.now()-anc.t0))/1000));
-    b.textContent="⏳ Quieto… "+s+" s ("+anc.samples.length+" lecturas)"; },250);
+    b.textContent="⏳ Quieto "+s+" s · "+anc.samples.length; },250);
   toast("Quédate quieto en "+fmtAbs1(a)+(off?(" a "+Math.abs(off).toFixed(1)+" m "+(off>0?"Der":"Izq")):" sobre el eje")+" durante 8 s.",4000);
 };
+/* promedio ponderado por 1/precisión² de lecturas con precisión ≤ 40 m */
+function avgSamples(list){
+  var s=list.filter(function(p){ return p.acc<=40; });
+  if(s.length<3) return {n:s.length};
+  var sw=0, mx=0, mz=0, ma=0, alt=0, na=0;
+  s.forEach(function(p){ var w=1/Math.max(1,p.acc*p.acc); sw+=w; mx+=p.x*w; mz+=p.z*w; ma+=p.acc; if(p.alt!=null){ alt+=p.alt; na++; } });
+  mx/=sw; mz/=sw; ma/=s.length;
+  var disp=0; s.forEach(function(p){ disp+=(p.x-mx)*(p.x-mx)+(p.z-mz)*(p.z-mz); }); disp=Math.sqrt(disp/s.length);
+  return {n:s.length, x:mx, z:mz, acc:ma, disp:disp, alt:na?alt/na:null};
+}
 function finishAnchor(){
   var A=anc; anc=null; clearInterval(ancTick); ancTick=null;
-  var b=$("#ancBtn"); b.disabled=false; b.textContent="📌 Anclar aquí (quieto 8 s)";
+  var b=$("#ancBtn"); b.disabled=false; b.textContent=P4?"📌 Anclar (8 s)":"📌 Ubicarme";
   if(!A) return;
-  var s=A.samples.filter(function(p){ return p.acc<=40; });
-  if(s.length<3){ toast("Ancla fallida: solo "+s.length+" lecturas GPS útiles. Espera señal (±<40 m) y repite.",5500); return; }
-  var sw=0, mx=0, mz=0, ma=0;
-  s.forEach(function(p){ var w=1/Math.max(1,p.acc*p.acc); sw+=w; mx+=p.x*w; mz+=p.z*w; ma+=p.acc; });
-  mx/=sw; mz/=sw; ma/=s.length;
-  var dx=A.target.x-mx, dz=A.target.z-mz, m=Math.hypot(dx,dz);
+  var s=avgSamples(A.samples);
+  if(s.n<3){ toast("Ancla fallida: solo "+s.n+" lecturas GPS útiles. Espera señal (±<40 m) y repite.",5500); return; }
+  var dx=A.target.x-s.x, dz=A.target.z-s.z, m=Math.hypot(dx,dz);
   if(m>60 && !confirm("La corrección sería de "+m.toFixed(0)+" m. ¿Seguro que estás en "+fmtAbs1(A.abs)+"?\nAceptar = aplicar · Cancelar = descartar")) return;
   gpsCorr={dx:dx, dz:dz, on:true, t:Date.now()};
-  obsTrk=newTrk(); obsTrk.idx=A.target.idx;          // continuidad: sabemos en qué abscisa estás
-  gpsEMA={x:mx, z:mz};                                // arranca el filtro en el promedio (sin arrastre)
+  obsTrk=newTrk(); obsTrk.idx=A.target.idx;
+  gpsEMA={x:s.x, z:s.z};
   applyGpsPos();
-  toast("📌 Ancla aplicada: corrección "+m.toFixed(1)+" m (GPS ±"+ma.toFixed(0)+" m). Repite cada ~30 min o ~500 m.",6500);
+  toast("📌 Ancla aplicada: corrección "+m.toFixed(1)+" m (GPS ±"+s.acc.toFixed(0)+" m). Repite cada ~30 min o ~500 m.",6500);
 }
 $("#ancClr").onclick=function(){
   cancelAnchor();
@@ -968,59 +1532,153 @@ $("#ancClr").onclick=function(){
   gpsCorr={dx:0,dz:0,on:false,t:0}; applyGpsPos(); toast("Ancla quitada: posición GPS cruda.",2500);
 };
 
+/* ---------- pantalla siempre encendida mientras se usa GPS / AR ---------- */
+var wl=null, wlWant=false;
+function wakeOn(){ wlWant=true; if(wl||!("wakeLock" in navigator)) return;
+  navigator.wakeLock.request("screen").then(function(s){ wl=s; s.addEventListener("release",function(){ wl=null; }); }).catch(function(){}); }
+function wakeOff(){ wlWant=false; if(wl){ wl.release().catch(function(){}); wl=null; } }
+document.addEventListener("visibilitychange",function(){ if(document.visibilityState==="visible" && wlWant) wakeOn(); });
+
 /* ---------- mapa en vivo (vía fija, tú te mueves) ---------- */
 function flatCircle(r,col,op,ro){
   var m=new THREE.Mesh(new THREE.CircleGeometry(r,40),
     new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:op,depthTest:false,depthWrite:false}));
   m.rotation.x=-Math.PI/2; m.renderOrder=ro; return m;
 }
-var meG=new THREE.Group(); meG.visible=false; scene.add(meG);
-var meAcc=flatCircle(1,0x2f9de0,0.16,19); meG.add(meAcc);
+var meG=new THREE.Group(); meG.visible=false; worldRoot.add(meG);
+var meAcc=flatCircle(1,0x2f9de0,0.16,49); meG.add(meAcc);
 var meDot=new THREE.Group(); meG.add(meDot);
-meDot.add(flatCircle(1.35,0xffffff,1,20));
-var _dot=flatCircle(1,0x2f9de0,1,21); _dot.position.y=0.01; meDot.add(_dot);
+meDot.add(flatCircle(1.35,0xffffff,1,50));
+var _dot=flatCircle(1,0x2f9de0,1,51); _dot.position.y=0.01; meDot.add(_dot);
 var meArrow=new THREE.Group(); meG.add(meArrow);
 (function(){ var sh=new THREE.Shape(); sh.moveTo(0,3.4); sh.lineTo(1.3,1.3); sh.lineTo(-1.3,1.3); sh.lineTo(0,3.4);
   var m=new THREE.Mesh(new THREE.ShapeGeometry(sh),
     new THREE.MeshBasicMaterial({color:0x2f9de0,transparent:true,opacity:0.95,depthTest:false,depthWrite:false,side:THREE.DoubleSide}));
-  m.rotation.x=-Math.PI/2; m.renderOrder=21; meArrow.add(m); })();
+  m.rotation.x=-Math.PI/2; m.renderOrder=51; meArrow.add(m); })();
 
+function mapHalfH(){ return map.h*Math.tan(MAPFOV*Math.PI/360); }
+function mapMpp(){ return 2*mapHalfH()/innerHeight; }
 function mapFrameAll(){
   if(!Cw.length) return;
   var x0=Infinity,x1=-Infinity,z0=Infinity,z1=-Infinity;
   Cw.forEach(function(p){ if(p[0]<x0)x0=p[0]; if(p[0]>x1)x1=p[0]; if(p[2]<z0)z0=p[2]; if(p[2]>z1)z1=p[2]; });
   map.cx=(x0+x1)/2; map.cz=(z0+z1)/2;
-  var th=Math.tan(camera.fov*Math.PI/360), asp=Math.max(0.3,camera.aspect);
+  var th=Math.tan(MAPFOV*Math.PI/360), asp=Math.max(0.3,innerWidth/innerHeight);
   map.h=Math.max(60, Math.max((z1-z0)/2/th, (x1-x0)/2/(th*asp))*1.15);
 }
 function mapApply(){
   if(map.follow && gpsFix){ map.cx=ar.px; map.cz=ar.pz; }
-  var by = gpsFix && map.follow ? ar.py : (Cw.length?Cw[nearestIdx(map.cx,map.cz)][1]:0);
-  camera.up.set(0,0,-1);                                  // norte arriba
-  camera.position.set(map.cx, by+map.h, map.cz);
-  camera.lookAt(map.cx, by, map.cz);
+  var hh=mapHalfH(), hw=hh*innerWidth/innerHeight, top=maxY+1000;
+  ocam.left=-hw; ocam.right=hw; ocam.top=hh; ocam.bottom=-hh; ocam.near=1; ocam.far=(top-minY)+2000;
+  ocam.up.set(0,0,-1);                                    // norte (de cuadrícula) arriba
+  ocam.position.set(map.cx, top, map.cz);
+  ocam.lookAt(map.cx, top-1, map.cz);
+  ocam.updateProjectionMatrix();
 }
 function meUpdate(){
   var show=(mode==="map" && gpsFix);
   meG.visible=show; if(!show) return;
   var s=Math.max(0.6, map.h/90);
-  meG.position.set(ar.px, ar.py+0.3, ar.pz);
+  meG.position.set(ar.px, maxY+5, ar.pz);
   var ac=Math.max(0.5, gpsLastAcc||5); meAcc.scale.set(ac,ac,ac);
   meDot.scale.set(s,s,s);
-  if(ar.active){ meArrow.visible=true; meArrow.scale.set(s,s,s);
-    meArrow.rotation.y=-(headingOfQuat(gyroQuat(_tq))+yawEff()); }   // rotación +Y = antihorario → se niega el azimut
+  var h=devHeading();
+  if(h!=null){ meArrow.visible=true; meArrow.scale.set(s,s,s); meArrow.rotation.y=-h; }
   else meArrow.visible=false;
 }
 var labelK=1;
-function setLabelScale(k){
-  if(Math.abs(k-labelK)/labelK<0.05 && k!==1) return;
+function setLabelScale(k,force){
+  if(!force && Math.abs(k-labelK)/labelK<0.05 && k!==1) return;
   labelK=k;
-  [postsGroup,hitosGroup].forEach(function(g){ if(!g) return;
+  [postsGroup,hitosGroup,obrasG,ptsG,tgtG,measG].forEach(function(g){ if(!g) return;
     g.traverse(function(o){ if(o.isSprite && o.userData.base){ o.scale.set(o.userData.base[0]*k,o.userData.base[1]*k,1); } }); });
 }
 $("#centerBtn").onclick=function(){
-  map.follow=true; this.classList.add("hide");
+  map.follow=true; updFabs();
   if(!gpsFix){ mapFrameAll(); toast(gpsWatch!=null?"Esperando posición GPS…":"GPS detenido: actívalo en ⚙.",3000); }
+};
+
+/* ---------- mapa base (teselas OSM / Esri) proyectadas al CRS del proyecto ---------- */
+var TILE_SRC={
+  osm:{url:"https://tile.openstreetmap.org/{z}/{x}/{y}.png", max:19, attr:"© OpenStreetMap contributors"},
+  sat:{url:"https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", max:19, attr:"Imagen © Esri, Maxar, Earthstar Geographics"}
+};
+var tiles={src:lsGet("viaAR_base","none"), m:{}, grp:new THREE.Group(), key:"", t:0, fails:0, warned:false};
+if(!TILE_SRC[tiles.src]) tiles.src="none";
+$("#baseMap").value=tiles.src;
+worldRoot.add(tiles.grp);
+var tLoader=new THREE.TextureLoader(); tLoader.setCrossOrigin("anonymous");
+function lon2tx(lon,z){ return (lon+180)/360*Math.pow(2,z); }
+function lat2ty(lat,z){ var r=lat*d2r; return (1-Math.log(Math.tan(r)+1/Math.cos(r))/Math.PI)/2*Math.pow(2,z); }
+function tx2lon(x,z){ return x/Math.pow(2,z)*360-180; }
+function ty2lat(y,z){ var n=Math.PI-2*Math.PI*y/Math.pow(2,z); return Math.atan(Math.sinh(n))/d2r; }
+function tilesClear(){ Object.keys(tiles.m).forEach(function(k){ tileDrop(k); }); tiles.key=""; }
+function tileDrop(k){ var t=tiles.m[k]; if(!t) return; tiles.grp.remove(t.mesh); t.mesh.geometry.dispose(); if(t.mesh.material.map) t.mesh.material.map.dispose(); t.mesh.material.dispose(); delete tiles.m[k]; }
+function tileMake(z,x,y,S){
+  var y0=minY-3;
+  var c=[[x,y],[x+1,y],[x+1,y+1],[x,y+1]].map(function(p){ return llToWorld(tx2lon(p[0],z),ty2lat(p[1],z),y0); });
+  var g=new THREE.BufferGeometry();
+  g.setAttribute("position",new THREE.Float32BufferAttribute([].concat(c[0],c[1],c[2],c[3]),3));
+  g.setAttribute("uv",new THREE.Float32BufferAttribute([0,1, 1,1, 1,0, 0,0],2));
+  g.setIndex([0,3,1, 1,3,2]);
+  var mat=new THREE.MeshBasicMaterial({depthTest:false,depthWrite:false,side:THREE.DoubleSide});
+  var mesh=new THREE.Mesh(g,mat); mesh.visible=false; mesh.renderOrder=-100+z;
+  var t={mesh:mesh,z:z,ok:false,fail:false,src:tiles.src}; tiles.m[z+"/"+x+"/"+y]=t; tiles.grp.add(mesh);
+  var url=S.url.replace("{z}",z).replace("{x}",x).replace("{y}",y);
+  tLoader.load(url,function(tex){
+    if(tiles.m[z+"/"+x+"/"+y]!==t){ tex.dispose(); return; }
+    tex.minFilter=THREE.LinearFilter; tex.generateMipmaps=false;
+    mat.map=tex; mat.needsUpdate=true; mesh.visible=true; t.ok=true; tiles.fails=0;
+  },undefined,function(){ t.fail=true; t.failT=performance.now(); tiles.fails++;
+    if(tiles.fails>=6 && !tiles.warned){ tiles.warned=true; toast("No cargan las teselas del mapa base (¿sin internet?). Se muestran las que ya estén guardadas.",4500); } });
+}
+function tilesUpdate(){
+  var S=TILE_SRC[tiles.src], on=(mode==="map" && S && P4);
+  tiles.grp.visible=!!on;
+  $("#attrib").classList.toggle("show",!!on);
+  if(gridObj) gridObj.visible = mode==="orbit"||mode==="walk"||(mode==="map"&&!on);
+  if(!on) return;
+  var now=performance.now(); if(now-tiles.t<200) return; tiles.t=now;
+  var hh=mapHalfH(), hw=hh*innerWidth/innerHeight;
+  var key=tiles.src+"|"+Math.round(map.cx)+"|"+Math.round(map.cz)+"|"+Math.round(map.h)+"|"+innerWidth+"x"+innerHeight;
+  if(key===tiles.key) return;
+  var corners;
+  try{ corners=[[-hw,-hh],[hw,-hh],[hw,hh],[-hw,hh]].map(function(o){ var en=toEN(map.cx+o[0],map.cz+o[1]); return P4.forward(en); }); }
+  catch(err){ return; }
+  tiles.key=key;
+  var lo0=Infinity,lo1=-Infinity,la0=Infinity,la1=-Infinity;
+  corners.forEach(function(c){ lo0=Math.min(lo0,c[0]); lo1=Math.max(lo1,c[0]); la0=Math.min(la0,c[1]); la1=Math.max(la1,c[1]); });
+  if(!isFinite(lo0)||Math.abs(la0)>85||Math.abs(la1)>85) return;
+  var mpp=mapMpp()/Math.min(2,devicePixelRatio||1), lat=(la0+la1)/2;
+  var z=Math.round(Math.log(156543.03392*Math.cos(lat*d2r)/mpp)/Math.LN2);
+  z=Math.max(3,Math.min(S.max,z));
+  var X0,X1,Y0,Y1;
+  for(;;){
+    X0=Math.floor(lon2tx(lo0,z)); X1=Math.floor(lon2tx(lo1,z)); Y0=Math.floor(lat2ty(la1,z)); Y1=Math.floor(lat2ty(la0,z));
+    if((X1-X0+1)*(Y1-Y0+1)<=48 || z<=3) break; z--;
+  }
+  var want={}, allReady=true;
+  for(var x=X0;x<=X1;x++) for(var y=Y0;y<=Y1;y++){
+    var k=z+"/"+x+"/"+y; want[k]=1;
+    if(tiles.m[k] && tiles.m[k].fail && now-tiles.m[k].failT>15000) tileDrop(k);   // reintento (volvió la señal)
+    if(!tiles.m[k]) tileMake(z,x,y,S);
+    var t=tiles.m[k]; if(!t.ok&&!t.fail) allReady=false;
+  }
+  // quitar teselas viejas: las de otro zoom se conservan como relleno hasta que carguen las nuevas
+  Object.keys(tiles.m).forEach(function(k){
+    if(want[k]) return; var t=tiles.m[k];
+    if(t.src!==tiles.src || allReady || Math.abs(t.z-z)>2 || t.z===z) tileDrop(k);
+  });
+  if(Object.keys(tiles.m).length>160) Object.keys(tiles.m).forEach(function(k){ if(!want[k]) tileDrop(k); });
+  if(!allReady || Object.keys(want).some(function(k){ return tiles.m[k]&&tiles.m[k].fail; })) tiles.key="";   // reintentar la poda / las fallidas
+  $("#attrib").textContent=S.attr;
+}
+$("#baseMap").onchange=function(){
+  tiles.src=this.value; lsSet("viaAR_base",tiles.src); tilesClear(); tiles.warned=false; tiles.fails=0;
+  if(tiles.src!=="none"){
+    if(!P4) toast("El JSON no trae CRS: no se puede ubicar el mapa base.",4000);
+    else if(mode!=="map") toast("El mapa base se ve en 'Mapa en vivo'.",3000);
+  }
 };
 
 /* ---------- cámara de fondo ---------- */
@@ -1040,100 +1698,906 @@ $("#camBtn").onclick=function(){
     .catch(function(){ toast("No se pudo abrir la cámara (requiere https y permiso).",4200); });
 };
 
+/* =====================================================================
+   OBJETIVO: "Ir a abscisa" / ir a un punto marcado
+   ===================================================================== */
+var tgt=null, tgtG=null, tgtLine=null;
+function clearTarget(){
+  tgt=null; if(tgtG){ worldRoot.remove(tgtG); disposeTree(tgtG); tgtG=null; tgtLine=null; }
+  $("#hbTgtRow").classList.add("hide");
+}
+function setTarget(t){
+  clearTarget(); tgt=t;
+  tgtG=new THREE.Group();
+  var y=t.y, col=0xff4fd8, hgt=6;
+  var g=new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(t.x,y,t.z),new THREE.Vector3(t.x,y+hgt,t.z)]);
+  var pole=new THREE.Line(g,new THREE.LineBasicMaterial({color:col,depthTest:false})); pole.renderOrder=25; tgtG.add(pole);
+  var ring=flatCircle(1.2,col,0.55,24); ring.position.set(t.x,y+0.08,t.z); ring.userData.ring=true; tgtG.add(ring);
+  var sph=new THREE.Mesh(new THREE.SphereGeometry(0.4,12,8),new THREE.MeshBasicMaterial({color:col,depthTest:false})); sph.position.set(t.x,y+hgt,t.z); sph.renderOrder=25; tgtG.add(sph);
+  var sp=labelSprite("🧭 "+t.label,col); sp.position.set(t.x,y+hgt+1.1,t.z); tgtG.add(sp);
+  var lg=new THREE.BufferGeometry(); lg.setAttribute("position",new THREE.Float32BufferAttribute([0,0,0,0,0,0],3));
+  tgtLine=new THREE.Line(lg,new THREE.LineDashedMaterial({color:col,dashSize:3,gapSize:2,depthTest:false})); tgtLine.renderOrder=26; tgtLine.visible=false; tgtLine.frustumCulled=false;
+  tgtG.add(tgtLine);
+  worldRoot.add(tgtG);
+  if(mode==="map") setLabelScale(Math.max(1,map.h/45),true);
+  $("#hbTgtRow").classList.remove("hide"); hudCache.hbTgt=null;
+}
+function ptsScale(){
+  if(!ptsG) return; var k=(mode==="map")?Math.max(1,map.h/70):1;
+  ptsG.children.forEach(function(o){ if(o.userData.mapScale && o.scale.x!==k) o.scale.set(k,k,k); });
+}
+/* en el mapa alejado se muestra solo 1 de cada N etiquetas K (evita que se amontonen) */
+var dcT=0;
+function declutter(){
+  var now=performance.now(), persp=(mode==="walk"||mode==="ar");
+  if(persp && now-dcT<(play.on?120:400)) return; dcT=now;
+  var cam=xr.on?{x:ar.px,z:ar.pz}:camera.position, R2=700*700;
+  [postsGroup,hitosGroup,obrasG].forEach(function(g){
+    if(!g) return; var u=g.userData;
+    var step=1;
+    if(g===postsGroup && mode==="map"){ var px=u.interval/mapMpp(); step=px>=90?1:Math.ceil(90/px); }
+    if(!persp && step===u.step && u.persp===false) return;
+    u.step=step; u.persp=persp;
+    var i=0;
+    g.children.forEach(function(o){ if(!o.isSprite) return;
+      var vis=(g!==postsGroup)||(o.userData.pi%step===0);
+      if(vis && persp){ var dx=o.position.x-cam.x, dz=o.position.z-cam.z, d2=dx*dx+dz*dz; vis=d2<R2 && d2>25; }   // >5 m: no tapa la vista al pasar junto al poste
+      o.visible=vis; i++; });
+  });
+}
+/* ---------- cruz dinámica (Mapa en vivo): lectura en vivo + perpendicular al eje ---------- */
+var crossG=null, crossKey="", crossT=0;
+function crossUpdate(){
+  var on=$("#cross").classList.contains("show");
+  if(!on||mode!=="map"||!Cw.length){ $("#crossInfo").classList.remove("show"); if(crossG) crossG.visible=false; return; }
+  var now=performance.now(); if(now-crossT<80) return; crossT=now;
+  var key=map.cx.toFixed(2)+"|"+map.cz.toFixed(2)+"|"+Math.round(map.h)+"|"+(gpsFix?ar.px.toFixed(1)+","+ar.pz.toFixed(1):"");
+  if(key===crossKey) return; crossKey=key;
+  var r=projFinish(projRange(map.cx,map.cz,null,null)), en=toEN(map.cx,map.cz), onAx=r.dist<Math.max(0.3,mapMpp()*6);
+  // lectura
+  var box=$("#crossInfo"); box.innerHTML="";
+  function line(parts){ var d=document.createElement("div"); parts.forEach(function(p){ if(p[1]){ var b=document.createElement("b"); b.textContent=p[0]; d.appendChild(b); } else d.appendChild(document.createTextNode(p[0])); }); box.appendChild(d); }
+  var outside=(r.abs<=Sm[0]+0.01||r.abs>=Sm[Sm.length-1]-0.01)&&r.dist>1;
+  line([[fmtAbs1(r.abs),1],[" · "+(onAx?"sobre el eje":(r.dist.toFixed(1)+" m "+(r.off>=0?"Der":"Izq")))+(outside?" (fuera del tramo)":""),0]]);
+  var cz="Cota ras. "+(r.py+anchor.z).toFixed(2);
+  if(r.cf!=null) cz+=" · "+fmtCf(r.cf);
+  line([[cz,0]]);
+  line([["E "+en[0].toFixed(2)+"  N "+en[1].toFixed(2),0]]);
+  if(gpsFix){ var dd=Math.hypot(map.cx-ar.px,map.cz-ar.pz); if(dd>0.5) line([["A "+dd.toFixed(1)+" m de ti",0]]); }
+  box.classList.add("show"); box.classList.toggle("onaxis",onAx); $("#cross").classList.toggle("onaxis",onAx);
+  // perpendicular cruz → eje (discontinua) + marca en el pie
+  if(!crossG){
+    crossG=new THREE.Group();
+    var lg=new THREE.BufferGeometry(); lg.setAttribute("position",new THREE.Float32BufferAttribute([0,0,0,0,0,0],3));
+    var l=new THREE.Line(lg,new THREE.LineDashedMaterial({color:0xff4fd8,dashSize:1,gapSize:0.7,depthTest:false})); l.renderOrder=45; l.frustumCulled=false; crossG.add(l);
+    var foot=flatCircle(1,0xff4fd8,0.95,46); crossG.add(foot);
+    worldRoot.add(crossG);
+  }
+  var y=maxY+4, ln=crossG.children[0], ft=crossG.children[1], a=ln.geometry.attributes.position, k=Math.max(0.3,map.h/140);
+  a.setXYZ(0,map.cx,y,map.cz); a.setXYZ(1,r.px,y,r.pz); a.needsUpdate=true; ln.geometry.computeBoundingSphere(); ln.computeLineDistances();
+  ln.material.dashSize=k*1.6; ln.material.gapSize=k; ln.visible=!onAx;
+  ft.position.set(r.px,y,r.pz); ft.scale.set(k*0.9,k*0.9,k*0.9);
+  crossG.visible=true;
+}
+
+function tgtUpdate(){
+  if(!tgtG) return;
+  var ringScale=(mode==="map")?Math.max(1,map.h/60):1;
+  tgtG.children.forEach(function(o){ if(o.userData.ring) o.scale.set(ringScale,ringScale,ringScale); });
+  var p=(mode==="map"&&gpsFix)?{x:ar.px,z:ar.pz}:null;
+  if(p){ var a=tgtLine.geometry.attributes.position, y=maxY+4;
+    a.setXYZ(0,p.x,y,p.z); a.setXYZ(1,tgt.x,y,tgt.z); a.needsUpdate=true; tgtLine.computeLineDistances();
+    tgtLine.material.dashSize=Math.max(2,map.h/40); tgtLine.material.gapSize=tgtLine.material.dashSize*0.7; tgtLine.visible=true; }
+  else tgtLine.visible=false;
+}
+$("#tgGo").onclick=function(){
+  if(!DATA||!DATA._ok) return;
+  var a=parseAbs($("#tgAbs").value);
+  if(a==null){ toast("Escribe la abscisa de destino (ej. K0+250).",3500); return; }
+  var off=parseFloat(String($("#tgOff").value||"0").replace(",","."))||0;
+  var p=pointAtAbs(a,off);
+  if(!p){ toast("Abscisa fuera del tramo ("+fmtAbs1(Sm[0])+" a "+fmtAbs1(Sm[Sm.length-1])+").",4500); return; }
+  var lbl=fmtAbs1(a)+(off?(" "+Math.abs(off).toFixed(1)+(off>0?"D":"I")):"");
+  setTarget({x:p.x,z:p.z,y:(p.gy!=null?p.gy:p.y),abs:a,off:off,label:lbl});
+  $("#panel").classList.remove("show"); document.body.classList.remove("panelOpen");
+  if(mode==="orbit") setMode("map");
+  toast("Objetivo "+lbl+" fijado. Mira la fila 'Objetivo' abajo.",3500);
+};
+$("#tgClr").onclick=function(){ clearTarget(); toast("Objetivo quitado.",1800); };
+/* "Saltar a": curvas (PC/TE) y obras del JSON v2 */
+function fillTgList(){
+  var sel=$("#tgList"); sel.innerHTML="";
+  var add=function(v,t){ var o=document.createElement("option"); o.value=v; o.textContent=t; sel.appendChild(o); };
+  add("","Elegir curva u obra…");
+  CURV.forEach(function(c,i){ add("c"+i, c.id+" · "+(c.tipo==="Espiral"?"TE ":"PC ")+fmtAbs(c.PC)+" · R="+Math.round(c.R)+" · "+(c.sentido==="der"?"der.":"izq.")); });
+  OBRAS.forEach(function(o,i){ add("o"+i, (o.id||("O"+(i+1)))+" · "+obraCorta(o.tipo)+" · "+fmtAbs(+o.abs)); });
+  $("#tgListRow").style.display=(CURV.length||OBRAS.length)?"":"none";
+}
+$("#tgList").onchange=function(){
+  var v=this.value; if(!v) return; var t=null;
+  if(v[0]==="c"){ var c=CURV[+v.slice(1)], p=pointAtAbs(+c.PC,0); if(p) t={x:p.x,z:p.z,y:(p.gy!=null?p.gy:p.y),abs:+c.PC,off:0,label:c.id+" "+(c.tipo==="Espiral"?"TE":"PC")}; }
+  else { var o=OBRAS[+v.slice(1)], w=toWorld(+o.e,+o.n,anchor.z), r=projFinish(projRange(w[0],w[2],null,null));
+    t={x:w[0],z:w[2],y:(o.z!=null&&isFinite(+o.z))?(+o.z-anchor.z):r.py,abs:r.abs,off:r.off,label:(o.id||"Obra")}; }
+  this.value=""; if(!t) return;
+  setTarget(t); panelShow(false); if(mode==="orbit") setMode("map");
+  toast("Objetivo "+t.label+" · "+fmtAbs1(t.abs)+" fijado.",3000);
+};
+
+/* =====================================================================
+   PUNTOS MARCADOS
+   ===================================================================== */
+var TIPOS=[
+  ["estaca","Estaca / referencia",0x35c0d6],["alcantarilla","Alcantarilla / drenaje",0x2f9de0],["dano","Daño / falla",0xe5603e],
+  ["obstaculo","Obstáculo / interferencia",0xff9f43],["talud","Talud / derrumbe",0xa0703c],["predio","Predio / límite",0xc77dff],["nota","Nota",0xdbe7ef]];
+function tipoInfo(k){ for(var i=0;i<TIPOS.length;i++) if(TIPOS[i][0]===k) return TIPOS[i]; return TIPOS[TIPOS.length-1]; }
+(function(){ var s=$("#mkTipo"); TIPOS.forEach(function(t){ var o=document.createElement("option"); o.value=t[0]; o.textContent=t[1]; s.appendChild(o); }); })();
+var PTS=[], ptsG=null;
+function loadPoints(){
+  var pid=PID;
+  ptsLoad(pid).then(function(a){ if(pid!==PID) return;
+    PTS=a.sort(function(p,q){ return p.num-q.num; }); rebuildPts(); });
+}
+function ptWorld(p){ var w=toWorld(p.e,p.n,anchor.z); w[1]=(p.cz!=null?p.cz:(p.cota!=null?p.cota:anchor.z))-anchor.z; return w; }
+function rebuildPts(){
+  if(ptsG){ worldRoot.remove(ptsG); disposeTree(ptsG); ptsG=null; }
+  $("#ptsBtn").textContent="📋 Ver / exportar puntos ("+PTS.length+")";
+  if(!PTS.length||!anchor) return;
+  ptsG=new THREE.Group();
+  PTS.forEach(function(p){
+    var w=ptWorld(p), col=tipoInfo(p.tipo)[2], hgt=2.6;
+    var g=new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(w[0],w[1],w[2]),new THREE.Vector3(w[0],w[1]+hgt,w[2])]);
+    ptsG.add(new THREE.Line(g,new THREE.LineBasicMaterial({color:col})));
+    var sph=new THREE.Mesh(new THREE.SphereGeometry(0.3,10,8),new THREE.MeshBasicMaterial({color:col})); sph.position.set(w[0],w[1]+hgt,w[2]); ptsG.add(sph);
+    var bc=flatCircle(0.5,col,0.9,35); bc.position.set(w[0],w[1]+0.05,w[2]); bc.userData.mapScale=true; ptsG.add(bc);
+    var sp=labelSprite("P"+p.num,col); sp.position.set(w[0],w[1]+hgt+0.9,w[2]); ptsG.add(sp);
+  });
+  worldRoot.add(ptsG);
+  if(mode==="map") setLabelScale(Math.max(1,map.h/45),true);
+}
+
+var MK_MS=6000;
+var mk={collect:false,samples:[],timer:null,tick:null,pos:null,photo:null,src:null,t0:0};
+function markReset(){ clearTimeout(mk.timer); clearInterval(mk.tick); mk={collect:false,samples:[],timer:null,tick:null,pos:null,photo:null,src:null,t0:0}; }
+function markOpen(){
+  if(!DATA||!DATA._ok) return;
+  if(mode==="orbit"){ toast("Para marcar cambia a Mapa en vivo, Recorrer o AR.",3500); return; }
+  markReset();
+  $("#mkTipo").value=lsGet("viaAR_lastTipo","estaca"); if(!$("#mkTipo").value) $("#mkTipo").value="estaca";
+  $("#mkDesc").value=""; $("#mkFoto").value=""; $("#mkPrev").style.display="none"; $("#mkPrev").removeAttribute("src");
+  $("#mkSave").disabled=true;
+  $("#markDlg").classList.remove("hide");
+  if(xr.on){
+    if(!xr.aligned){ $("#markDlg").classList.add("hide"); toast("Primero alinea con las estacas A y B.",3500); return; }
+    var XP=(xr.hit?xr.hit.clone():new THREE.Vector3(xr.cam.x,xr.cam.y-ar.eye,xr.cam.z)).applyMatrix4(xr.Mi);
+    mk.src=xr.hit?"AR Pro (retícula)":"AR Pro (tu posición)"; mk.zar=XP.y+anchor.z;
+    markSetPos(XP.x,XP.z,{n:0,acc:null,disp:null,alt:null,trk:-1},
+      (xr.hit?"Punto donde apunta la cruz (sobre el piso detectado).":"Sin piso detectado: se usó tu posición.")+" Precisión relativa a la alineación: "+(xr.rotSrc||"aprox.")+".");
+    return;
+  }
+  var useGps=(gpsWatch!=null && gpsFix && (mode==="ar" || (mode==="map" && map.follow)));
+  if(useGps){
+    mk.src="GPS"; mk.collect=true; mk.t0=Date.now();
+    mk.timer=setTimeout(markGpsDone,MK_MS);
+    mk.tick=setInterval(function(){ var s=Math.max(0,Math.ceil((MK_MS-(Date.now()-mk.t0))/1000));
+      $("#mkStat").innerHTML="⏳ Quieto: promediando GPS… <b>"+s+" s</b> ("+mk.samples.length+" lecturas)<br><span style='color:var(--mut)'>Mientras tanto llena tipo, descripción y foto.</span>"; },250);
+    $("#mkStat").textContent="⏳ Quieto: promediando GPS…";
+  } else {
+    var p = mode==="map" ? {x:map.cx,z:map.cz} : mode==="walk" ? {x:camera.position.x,z:camera.position.z} : {x:ar.px,z:ar.pz};
+    mk.src = mode==="map" ? "mapa (cruz)" : mode==="walk" ? "recorrido virtual" : "AR sin GPS";
+    markSetPos(p.x,p.z,{n:0,acc:null,disp:null,alt:null,trk:(mode==="walk"?walkTrk.idx:(mode==="ar"?obsTrk.idx:-1))},
+      mode==="map" ? "Posición = centro del mapa (cruz rosada)." : mode==="walk" ? "Posición = donde estás en el recorrido virtual." : "Sin GPS: posición manual del observador.");
+  }
+}
+function markGpsDone(){
+  clearTimeout(mk.timer); clearInterval(mk.tick); mk.timer=null; mk.tick=null;
+  if(!mk.collect) return;
+  mk.collect=false;
+  var s=avgSamples(mk.samples), note;
+  if(s.n>=3){
+    s.x+=gpsCorr.on?gpsCorr.dx:0; s.z+=gpsCorr.on?gpsCorr.dz:0;
+    note=s.n+" lecturas · dispersión "+s.disp.toFixed(1)+" m"+(gpsCorr.on?" · con ancla":" · sin ancla");
+  } else if(gpsEMA){
+    s={n:s.n,x:gpsEMA.x+(gpsCorr.on?gpsCorr.dx:0),z:gpsEMA.z+(gpsCorr.on?gpsCorr.dz:0),acc:gpsLastAcc,disp:null,alt:null};
+    note="⚠ Solo "+s.n+" lecturas útiles: se usó la posición filtrada actual.";
+    mk.src="GPS (sin promedio)";
+  } else { $("#mkStat").textContent="⚠ Sin lecturas GPS. Cancela y reintenta con mejor señal."; return; }
+  s.trk=obsTrk.idx;
+  markSetPos(s.x,s.z,s,note);
+}
+function markSetPos(x,z,s,note){
+  var trk={idx:(s.trk!=null?s.trk:-1),lost:0};   // GPS/AR/Recorrer: continuidad de abscisa · cruz del mapa: búsqueda global
+  var r=(trk.idx>=0)?trackProject(x,z,trk,s.acc||0):projFinish(projRange(x,z,null,null));
+  var en=toEN(x,z), ll=toLL(en[0],en[1]);
+  mk.pos={x:x,z:z,e:en[0],n:en[1],lat:ll?ll[1]:null,lon:ll?ll[0]:null,abs:r.abs,off:r.off,dist:r.dist,
+    cota:r.py+anchor.z, ter:(r.gy!=null?r.gy+anchor.z:null), cz:(r.gy!=null?r.gy:r.py)+anchor.z,
+    acc:s.acc, ns:s.n, disp:s.disp, alt:s.alt};
+  $("#mkStat").innerHTML="";
+  var st=$("#mkStat");
+  function line(t,b){ var d=document.createElement("div"); if(b){ var bb=document.createElement("b"); bb.textContent=t; d.appendChild(bb);} else d.textContent=t; st.appendChild(d); }
+  line(fmtAbs1(r.abs)+" · "+(r.dist<0.3?"sobre el eje":(r.dist.toFixed(1)+" m "+(r.off>=0?"Der":"Izq"))),true);
+  line("E "+en[0].toFixed(2)+" · N "+en[1].toFixed(2)+(s.acc!=null?(" · ±"+s.acc.toFixed(0)+" m"):""));
+  if(note) line(note);
+  $("#mkSave").disabled=false;
+}
+function resizePhoto(file){
+  return new Promise(function(res,rej){
+    var fr=new FileReader();
+    fr.onload=function(){ var img=new Image();
+      img.onload=function(){ var M=1600, k=Math.min(1,M/Math.max(img.naturalWidth,img.naturalHeight));
+        var c=document.createElement("canvas"); c.width=Math.round(img.naturalWidth*k); c.height=Math.round(img.naturalHeight*k);
+        c.getContext("2d").drawImage(img,0,0,c.width,c.height); res(c.toDataURL("image/jpeg",0.82)); };
+      img.onerror=function(){ rej(new Error("imagen")); }; img.src=fr.result; };
+    fr.onerror=function(){ rej(fr.error); }; fr.readAsDataURL(file);
+  });
+}
+$("#mkFoto").onchange=function(){
+  var f=this.files&&this.files[0]; if(!f){ mk.photo=null; $("#mkPrev").style.display="none"; return; }
+  resizePhoto(f).then(function(u){ mk.photo=u; var im=$("#mkPrev"); im.src=u; im.style.display="block"; })
+    .catch(function(){ mk.photo=null; toast("No se pudo leer la foto.",3000); });
+};
+$("#mkCancel").onclick=function(){ markReset(); $("#markDlg").classList.add("hide"); };
+$("#mkSave").onclick=function(){
+  if(!mk.pos) return;
+  var P=mk.pos, num=PTS.reduce(function(m,p){ return Math.max(m,p.num); },0)+1;
+  var tipo=$("#mkTipo").value; lsSet("viaAR_lastTipo",tipo);
+  var p={uid:PID+":"+Date.now()+":"+Math.random().toString(36).slice(2,7), pid:PID, proyecto:DATA.proyecto||"", num:num,
+    tipo:tipo, desc:$("#mkDesc").value.trim(), e:P.e, n:P.n, lat:P.lat, lon:P.lon, abs:P.abs, off:P.off, dist:P.dist,
+    cota:P.cota, ter:P.ter, cz:P.cz, alt:P.alt, acc:P.acc, nS:P.ns, disp:P.disp, src:mk.src, zar:(mk.zar!=null?mk.zar:null), t:new Date().toISOString(), foto:!!mk.photo};
+  var photo=mk.photo;
+  askPersist();
+  (photo?kvSet("foto:"+p.uid,photo):Promise.resolve()).then(function(){ return ptsPut(p); }).then(function(){
+    PTS.push(p); rebuildPts();
+    toast("P"+num+" guardado ✓ "+fmtAbs1(p.abs)+" · "+(p.dist<0.3?"eje":(Math.abs(p.off).toFixed(1)+" m "+(p.off>=0?"Der":"Izq"))),3500);
+  });
+  markReset(); $("#markDlg").classList.add("hide");
+};
+$("#markBtn").onclick=markOpen;
+
+function getPhoto(p){ if(typeof p.foto==="string") return Promise.resolve(p.foto); if(!p.foto) return Promise.resolve(null); return kvGet("foto:"+p.uid).then(function(u){ return u||null; }); }
+function renderPtsList(){
+  var L=$("#ptsList"); L.innerHTML="";
+  $("#ptsInfo").textContent = PTS.length ? (PTS.length+" punto(s) en este proyecto · guardados en este equipo. Exporta para respaldarlos.")
+                                         : "Aún no hay puntos. Usa 🚩 Marcar en Mapa en vivo, Recorrer o AR.";
+  var cp=curPos();
+  PTS.slice().reverse().forEach(function(p){
+    var ti=tipoInfo(p.tipo), box=document.createElement("div"); box.className="pt";
+    var h=document.createElement("div"); h.className="h";
+    var dot=document.createElement("span"); dot.className="dot"; dot.style.background="#"+("000000"+ti[2].toString(16)).slice(-6);
+    var b=document.createElement("b"); b.textContent="P"+p.num;
+    var s=document.createElement("span"); s.textContent=ti[1];
+    h.appendChild(dot); h.appendChild(b); h.appendChild(s); box.appendChild(h);
+    var m=document.createElement("div"); m.className="m";
+    var w=ptWorld(p), dtxt="";
+    if(cp){ dtxt=" · a "+Math.hypot(w[0]-cp.x,w[2]-cp.z).toFixed(1)+" m de ti"; }
+    m.textContent=fmtAbs1(p.abs)+" · "+(p.dist<0.3?"eje":(Math.abs(p.off).toFixed(1)+" m "+(p.off>=0?"Der":"Izq")))+
+      (p.acc!=null?(" · ±"+p.acc.toFixed(0)+" m"):"")+" · "+p.src+dtxt+(p.desc?("\n"+p.desc):"")+"\n"+new Date(p.t).toLocaleString();
+    m.style.whiteSpace="pre-line"; box.appendChild(m);
+    var a=document.createElement("div"); a.className="a";
+    function btn(txt,fn){ var x=document.createElement("button"); x.className="btn"; x.textContent=txt; x.onclick=fn; a.appendChild(x); return x; }
+    btn("🧭 Ir",function(){ setTarget({x:w[0],z:w[2],y:w[1],abs:p.abs,off:p.off,label:"P"+p.num});
+      $("#ptsDlg").classList.add("hide"); if(mode==="orbit") setMode("map"); toast("Objetivo P"+p.num+" fijado.",2500); });
+    if(p.foto) btn("📷 Foto",function(){ getPhoto(p).then(function(u){ if(!u){ toast("No se encontró la foto.",2500); return; }
+      $("#photoImg").src=u; $("#photoView").classList.remove("hide"); }); });
+    btn("🗑",function(){ if(!confirm("¿Borrar P"+p.num+"? No se puede deshacer.")) return;
+      if(p.foto) kvDel("foto:"+p.uid);
+      ptsDel(p.uid,p.pid).then(function(){ PTS=PTS.filter(function(q){ return q.uid!==p.uid; }); rebuildPts(); renderPtsList();
+        if(tgt&&tgt.label==="P"+p.num) clearTarget(); }); });
+    box.appendChild(a); L.appendChild(box);
+  });
+}
+$("#ptsBtn").onclick=function(){ renderPtsList(); $("#ptsDlg").classList.remove("hide"); };
+$("#ptsClose").onclick=function(){ $("#ptsDlg").classList.add("hide"); };
+$("#photoClose").onclick=function(){ $("#photoView").classList.add("hide"); $("#photoImg").removeAttribute("src"); };
+
+/* ---------- exportación ---------- */
+function safeName(s){ return String(s||"proyecto").normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^A-Za-z0-9_\-]+/g,"_").replace(/^_+|_+$/g,"").slice(0,40)||"proyecto"; }
+function stamp(){ var d=new Date(), p=function(n){ return String(n).padStart(2,"0"); };
+  return d.getFullYear()+p(d.getMonth()+1)+p(d.getDate())+"_"+p(d.getHours())+p(d.getMinutes()); }
+function download(blob,name){
+  var a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=name; document.body.appendChild(a); a.click();
+  setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); },5000);
+}
+function num(v,d){ return (v==null||!isFinite(v))?"":(+v).toFixed(d); }
+function csvEsc(v){ v=String(v==null?"":v); return /[",\n\r]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v; }
+function ptsCSV(){
+  var H=["id","tipo","descripcion","abscisa","abscisa_m","lateral_m","lado","este","norte","cota_rasante","cota_terreno","cota_ar","alt_gps","lat","lon","precision_m","muestras","dispersion_m","fuente","fecha","foto"];
+  var rows=[H.join(",")];
+  PTS.forEach(function(p){
+    rows.push([ "P"+p.num, tipoInfo(p.tipo)[1], p.desc, fmtAbs1(p.abs), num(p.abs,2), num(p.dist,2), p.dist<0.3?"eje":(p.off>=0?"Der":"Izq"),
+      num(p.e,3), num(p.n,3), num(p.cota,3), num(p.ter,3), num(p.zar,3), num(p.alt,1), num(p.lat,8), num(p.lon,8), num(p.acc,1), p.nS||0, num(p.disp,2),
+      p.src, p.t, p.foto?("fotos/P"+p.num+".jpg"):"" ].map(csvEsc).join(","));
+  });
+  return "﻿"+rows.join("\r\n")+"\r\n";
+}
+function ptProps(p){ return {id:"P"+p.num, tipo:tipoInfo(p.tipo)[1], descripcion:p.desc, abscisa:fmtAbs1(p.abs), abscisa_m:+num(p.abs,2),
+  lateral_m:+num(p.dist,2), lado:p.dist<0.3?"eje":(p.off>=0?"Der":"Izq"), este:+num(p.e,3), norte:+num(p.n,3),
+  cota_rasante:p.cota!=null?+num(p.cota,3):null, cota_terreno:p.ter!=null?+num(p.ter,3):null, cota_ar:p.zar!=null?+num(p.zar,3):null, alt_gps:p.alt!=null?+num(p.alt,1):null,
+  precision_m:p.acc!=null?+num(p.acc,1):null, muestras:p.nS||0, fuente:p.src, fecha:p.t, foto:p.foto?("fotos/P"+p.num+".jpg"):null}; }
+function ptsGeoJSON(){
+  var geo=PTS.every(function(p){ return p.lat!=null&&p.lon!=null; });
+  var fc={type:"FeatureCollection", name:(DATA.proyecto||"puntos"),
+    features:PTS.map(function(p){ return {type:"Feature", properties:ptProps(p),
+      geometry:{type:"Point", coordinates: geo?[+num(p.lon,8),+num(p.lat,8)]:[+num(p.e,3),+num(p.n,3)]}}; })};
+  if(!geo) fc.crs_proyecto=(DATA.crs&&DATA.crs.proj)||"local (sin CRS)";
+  return JSON.stringify(fc,null,1);
+}
+function xmlEsc(s){ return String(s==null?"":s).replace(/[<>&'"]/g,function(c){ return {"<":"&lt;",">":"&gt;","&":"&amp;","'":"&apos;",'"':"&quot;"}[c]; }); }
+function ptsKML(){
+  var st=TIPOS.map(function(t){ var h=("000000"+t[2].toString(16)).slice(-6);
+    return '<Style id="'+t[0]+'"><IconStyle><color>ff'+h.slice(4,6)+h.slice(2,4)+h.slice(0,2)+'</color><scale>1.1</scale><Icon><href>http://maps.google.com/mapfiles/kml/paddle/wht-blank.png</href></Icon></IconStyle></Style>'; }).join("");
+  var pm=PTS.filter(function(p){ return p.lat!=null; }).map(function(p){ var pr=ptProps(p);
+    var desc=Object.keys(pr).filter(function(k){ return pr[k]!=null&&pr[k]!==""; }).map(function(k){ return k+": "+pr[k]; }).join("\n");
+    return "<Placemark><name>P"+p.num+"</name><styleUrl>#"+xmlEsc(p.tipo)+"</styleUrl><description>"+xmlEsc(desc)+"</description><Point><coordinates>"+num(p.lon,8)+","+num(p.lat,8)+",0</coordinates></Point></Placemark>"; }).join("\n");
+  return '<?xml version="1.0" encoding="UTF-8"?>\n<kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>'+xmlEsc(DATA.proyecto||"Puntos")+"</name>"+st+"\n"+pm+"\n</Document></kml>\n";
+}
+/* ZIP sin compresión (STORE): suficiente para CSV + fotos JPG ya comprimidas */
+var CRC_T=null;
+function crc32(u){ if(!CRC_T){ CRC_T=new Uint32Array(256); for(var n=0;n<256;n++){ var c=n; for(var k=0;k<8;k++) c=c&1?0xEDB88320^(c>>>1):c>>>1; CRC_T[n]=c>>>0; } }
+  var c=0xFFFFFFFF; for(var i=0;i<u.length;i++) c=CRC_T[(c^u[i])&255]^(c>>>8); return (c^0xFFFFFFFF)>>>0; }
+function makeZip(files){
+  var enc=new TextEncoder(), parts=[], central=[], off=0, d=new Date();
+  var dt=((d.getHours()<<11)|(d.getMinutes()<<5)|(d.getSeconds()>>1))&0xFFFF, dd=(((d.getFullYear()-1980)<<9)|((d.getMonth()+1)<<5)|d.getDate())&0xFFFF;
+  files.forEach(function(f){
+    var name=enc.encode(f.name), data=typeof f.data==="string"?enc.encode(f.data):f.data, crc=crc32(data);
+    var h=new DataView(new ArrayBuffer(30));
+    h.setUint32(0,0x04034b50,true); h.setUint16(4,20,true); h.setUint16(6,0x0800,true); h.setUint16(8,0,true);
+    h.setUint16(10,dt,true); h.setUint16(12,dd,true); h.setUint32(14,crc,true); h.setUint32(18,data.length,true); h.setUint32(22,data.length,true);
+    h.setUint16(26,name.length,true); h.setUint16(28,0,true);
+    parts.push(h.buffer,name,data);
+    var c=new DataView(new ArrayBuffer(46));
+    c.setUint32(0,0x02014b50,true); c.setUint16(4,20,true); c.setUint16(6,20,true); c.setUint16(8,0x0800,true); c.setUint16(10,0,true);
+    c.setUint16(12,dt,true); c.setUint16(14,dd,true); c.setUint32(16,crc,true); c.setUint32(20,data.length,true); c.setUint32(24,data.length,true);
+    c.setUint16(28,name.length,true); c.setUint16(30,0,true); c.setUint16(32,0,true); c.setUint16(34,0,true); c.setUint16(36,0,true);
+    c.setUint32(38,0,true); c.setUint32(42,off,true);
+    central.push(c.buffer,name);
+    off+=30+name.length+data.length;
+  });
+  var cdSize=central.reduce(function(s,b){ return s+(b.byteLength!=null?b.byteLength:b.length); },0);
+  var e=new DataView(new ArrayBuffer(22));
+  e.setUint32(0,0x06054b50,true); e.setUint16(8,files.length,true); e.setUint16(10,files.length,true);
+  e.setUint32(12,cdSize,true); e.setUint32(16,off,true);
+  return new Blob(parts.concat(central,[e.buffer]),{type:"application/zip"});
+}
+function dataUrlBytes(u){ var b=atob(u.split(",")[1]), a=new Uint8Array(b.length); for(var i=0;i<b.length;i++) a[i]=b.charCodeAt(i); return a; }
+function needPts(){ if(!PTS.length){ toast("No hay puntos para exportar.",2500); return false; } return true; }
+var exBase=function(){ return safeName(DATA.proyecto)+"_puntos_"+stamp(); };
+$("#exCsv").onclick=function(){ if(needPts()) download(new Blob([ptsCSV()],{type:"text/csv;charset=utf-8"}),exBase()+".csv"); };
+$("#exGeo").onclick=function(){ if(needPts()) download(new Blob([ptsGeoJSON()],{type:"application/geo+json"}),exBase()+".geojson"); };
+$("#exKml").onclick=function(){ if(!needPts()) return;
+  if(!P4){ toast("Sin CRS no hay lat/lon: KML no disponible. Usa CSV.",3500); return; }
+  download(new Blob([ptsKML()],{type:"application/vnd.google-earth.kml+xml"}),exBase()+".kml"); };
+$("#exZip").onclick=function(){ if(!needPts()) return;
+  var btn=this; btn.disabled=true; toast("Armando ZIP…",1500);
+  Promise.all(PTS.map(function(p){ return getPhoto(p).then(function(u){ return u?{name:"fotos/P"+p.num+".jpg",data:dataUrlBytes(u)}:null; }); }))
+  .then(function(photos){
+    var f=[{name:"puntos.csv",data:ptsCSV()},{name:"puntos.geojson",data:ptsGeoJSON()}];
+    if(P4) f.push({name:"puntos.kml",data:ptsKML()});
+    photos.forEach(function(x){ if(x) f.push(x); });
+    f.push({name:"LEEME.txt",data:"Proyecto: "+(DATA.proyecto||"")+"\r\nCRS: "+((DATA.crs&&DATA.crs.proj)||"sin CRS")+
+      "\r\nCoordenadas este/norte en el CRS del proyecto; lat/lon WGS84.\r\nPrecisión = la reportada por el GPS del celular (no es levantamiento topográfico).\r\nExportado: "+new Date().toLocaleString()+"\r\n"});
+    download(makeZip(f),exBase()+".zip");
+  }).catch(function(err){ toast("No se pudo armar el ZIP: "+(err.message||err),4000); })
+  .then(function(){ btn.disabled=false; });
+};
+
+/* =====================================================================
+   MEDIR (Mapa en vivo): toca dos puntos
+   ===================================================================== */
+var measure={on:false, pts:[]}, measG=null;
+function measureClear(){ measure.pts=[]; if(measG){ worldRoot.remove(measG); disposeTree(measG); measG=null; } }
+function measureTap(cx,cy){
+  var mpp=mapMpp(), x=map.cx+(cx-innerWidth/2)*mpp, z=map.cz+(cy-innerHeight/2)*mpp, snapR=22*mpp, lbl=null;
+  // imán a puntos marcados y a tu posición
+  PTS.forEach(function(p){ var w=ptWorld(p); if(Math.hypot(w[0]-x,w[2]-z)<snapR){ x=w[0]; z=w[2]; lbl="P"+p.num; } });
+  if(gpsFix && Math.hypot(ar.px-x,ar.pz-z)<snapR){ x=ar.px; z=ar.pz; lbl="tú"; }
+  if(measure.pts.length>=2) measureClear();
+  measure.pts.push({x:x,z:z,l:lbl});
+  measureDraw();
+}
+function measureDraw(){
+  if(measG){ worldRoot.remove(measG); disposeTree(measG); }
+  measG=new THREE.Group(); var y=maxY+3, col=0xffe14d;
+  measure.pts.forEach(function(p){ var c=flatCircle(Math.max(0.6,map.h/120),col,1,27); c.position.set(p.x,y,p.z); measG.add(c); });
+  if(measure.pts.length===2){
+    var a=measure.pts[0], b=measure.pts[1];
+    var g=new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(a.x,y,a.z),new THREE.Vector3(b.x,y,b.z)]);
+    var l=new THREE.Line(g,new THREE.LineBasicMaterial({color:col,depthTest:false})); l.renderOrder=27; measG.add(l);
+    var d=Math.hypot(b.x-a.x,b.z-a.z), az=((Math.atan2(b.x-a.x,-(b.z-a.z))/d2r)+360)%360;
+    var ra=projFinish(projRange(a.x,a.z,null,null)), rb=projFinish(projRange(b.x,b.z,null,null));
+    var sp=labelSprite(d.toFixed(1)+" m",col); sp.position.set((a.x+b.x)/2,y,(a.z+b.z)/2); measG.add(sp);
+    toast("📏 "+(a.l||"A")+" → "+(b.l||"B")+": "+d.toFixed(2)+" m horiz. · Az "+az.toFixed(1)+"° · ΔK "+Math.abs(rb.abs-ra.abs).toFixed(1)+" m. Toca de nuevo para otra medida.",8000);
+  } else toast("📏 Toca el segundo punto.",2500);
+  worldRoot.add(measG);
+  setLabelScale(Math.max(1,map.h/45),true);
+}
+$("#measureBtn").onclick=function(){
+  measure.on=!measure.on; this.classList.toggle("on",measure.on);
+  if(measure.on) toast("📏 Medir: toca dos puntos en el mapa (se pegan a puntos marcados y a tu posición).",4000);
+  else measureClear();
+};
+
+/* =====================================================================
+   CAPTURA (vista + cámara + datos)
+   ===================================================================== */
+$("#shotBtn").onclick=function(){
+  if(!DATA||!DATA._ok) return;
+  try{
+    var cv=renderer.domElement, W=cv.width, H=cv.height, c=document.createElement("canvas"); c.width=W; c.height=H;
+    var g=c.getContext("2d"), v=$("#cam");
+    if(camStream && v.videoWidth){   // mismo recorte que object-fit:cover
+      var s=Math.max(W/v.videoWidth,H/v.videoHeight), vw=v.videoWidth*s, vh=v.videoHeight*s;
+      g.drawImage(v,(W-vw)/2,(H-vh)/2,vw,vh);
+    } else { g.fillStyle="#0e1418"; g.fillRect(0,0,W,H); }
+    renderer.render(scene,activeCam());            // en el mismo ciclo: no hace falta preserveDrawingBuffer
+    g.drawImage(cv,0,0);
+    var k=W/innerWidth, lines=[(DATA.proyecto||"Vía")+" · "+new Date().toLocaleString()];
+    var hp=(mode==="walk")||(mode==="ar")||(mode==="map"&&gpsFix);
+    if(hp){ var o=(mode==="walk"&&walkR)?walkR:ar; lines.push(fmtAbs1(o.abs)+" · "+(o.dist!=null?(o.dist<0.3?"eje":(o.dist.toFixed(1)+" m "+(o.off>=0?"Der":"Izq"))):"")); }
+    if(gpsFix){ var en=toEN(ar.px,ar.pz); lines.push("E "+en[0].toFixed(1)+" N "+en[1].toFixed(1)+" · GPS ±"+(gpsLastAcc||0).toFixed(0)+" m"+(gpsCorr.on?" (ancla)":"")); }
+    var fs=Math.round(13*k), pad=Math.round(8*k), lh=Math.round(fs*1.35), bh=lines.length*lh+pad*2;
+    g.fillStyle="rgba(0,0,0,.6)"; g.fillRect(0,H-bh,W,bh);
+    g.fillStyle="#fff"; g.font=fs+"px 'Segoe UI',Arial"; g.textBaseline="top";
+    lines.forEach(function(t,i){ g.fillText(t,pad,H-bh+pad+i*lh); });
+    c.toBlob(function(b){ if(b){ download(b,"captura_"+safeName(DATA.proyecto)+"_"+stamp()+".jpg"); toast("📸 Captura guardada.",2000);} else toast("No se pudo generar la captura.",3000); },"image/jpeg",0.9);
+  }catch(err){ toast("No se pudo capturar: "+(err.message||err),4000); }
+};
+
+/* =====================================================================
+   AR PRO — WebXR + ARCore (Chrome en Android)
+   La cámara la sigue ARCore (seguimiento visual, 6 grados de libertad).
+   El proyecto se amarra al espacio de ARCore con estacas conocidas:
+     · A + B capturadas en el piso  → giro + posición + altura (lo más preciso)
+     · A + apuntar a B              → giro por dirección (B lejana, sin caminar)
+     · aproximado GPS + brújula     → solo para ver algo al entrar
+   ===================================================================== */
+var xr={supported:false,why:"",on:false,session:null,hts:null,hit:null,overlay:false,
+  M:new THREE.Matrix4(),Mi:new THREE.Matrix4(),aligned:false,phi:0,t:[0,0,0],
+  rotSrc:"",posSrc:"",q:null,A:null,cam:new THREE.Vector3(),camQ:new THREE.Quaternion(),
+  lost:false,lostT:0,lastToast:0,gpsD:null,forceB:0};
+var reticle=new THREE.Group(); reticle.visible=false; scene.add(reticle);
+(function(){ var r=new THREE.Mesh(new THREE.RingGeometry(0.11,0.15,32),new THREE.MeshBasicMaterial({color:0xff4fd8,depthTest:false,side:THREE.DoubleSide}));
+  r.rotation.x=-Math.PI/2; r.renderOrder=60; reticle.add(r);
+  var d=new THREE.Mesh(new THREE.CircleGeometry(0.025,16),new THREE.MeshBasicMaterial({color:0xffffff,depthTest:false,side:THREE.DoubleSide}));
+  d.rotation.x=-Math.PI/2; d.renderOrder=61; reticle.add(d); })();
+var xrMarks=new THREE.Group(); scene.add(xrMarks);   // estacas capturadas (en coordenadas de ARCore)
+function clearXrMarks(){ disposeTree(xrMarks); while(xrMarks.children.length) xrMarks.remove(xrMarks.children[0]); }
+function xrMarkAt(X,col,lbl){
+  var g=new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(X.x,X.y,X.z),new THREE.Vector3(X.x,X.y+1.2,X.z)]);
+  xrMarks.add(new THREE.Line(g,new THREE.LineBasicMaterial({color:col})));
+  var sp=labelSprite(lbl,col); sp.scale.multiplyScalar(0.35); sp.position.set(X.x,X.y+1.45,X.z); xrMarks.add(sp);
+}
+
+function xrCheck(){
+  if(!window.isSecureContext){ xr.why="AR Pro necesita https: abre la versión publicada en Netlify."; updXrUI(); return; }
+  if(!navigator.xr||!navigator.xr.isSessionSupported){ xr.why="Este navegador no tiene WebXR. Usa Chrome en Android."; updXrUI(); return; }
+  navigator.xr.isSessionSupported("immersive-ar").then(function(ok){
+    xr.supported=!!ok;
+    xr.why=ok?"":"No disponible: instala «Servicios de Google Play para RA» (Play Store). Si el celular no es compatible, usa el AR básico.";
+    updXrUI();
+  }).catch(function(){ xr.why="No se pudo consultar ARCore en este equipo."; updXrUI(); });
+}
+function updXrUI(){
+  var a=$("#xrAvail"); a.textContent=xr.supported?"Disponible en este equipo ✓":xr.why; a.className="hint"+(xr.supported?"":" wa");
+  $("#xrBtn").disabled=!xr.supported;
+  $("#xrSetupBox").style.display=xr.supported?"":"none"; $("#xrBtn").style.display=xr.supported?"":"none";   // sin ARCore: solo el aviso
+  updFabs();
+}
+
+/* rotación de (x,z) alrededor del eje vertical, misma convención que Matrix4.makeRotationY */
+function rotXZ(phi,x,z){ var c=Math.cos(phi), s=Math.sin(phi); return [x*c+z*s, -x*s+z*c]; }
+function angXZ(x,z){ return Math.atan2(x,z); }
+/* traslación que lleva el punto de proyecto Pw al punto de ARCore Px, con giro phi */
+function tFor(phi,Px,Pw){ var r=rotXZ(phi,Pw.x,Pw.z); return [Px.x-r[0], Px.y-Pw.y, Px.z-r[1]]; }
+function xrApply(phi,t){
+  xr.phi=normAng(phi); xr.t=t;
+  xr.M.makeRotationY(xr.phi); xr.M.setPosition(t[0],t[1],t[2]); xr.Mi.copy(xr.M).invert();
+  worldRoot.matrix.copy(xr.M); worldRoot.matrixWorldNeedsUpdate=true; worldRoot.visible=true;
+  xr.aligned=true; obsKey=null; obsTrk=newTrk();   // tras realinear, la abscisa se busca de nuevo en todo el eje
+}
+/* estaca de diseño (abscisa + lateral) → punto del proyecto sobre el terreno */
+function xrStake(w){
+  var a=parseAbs($("#xr"+w+"abs").value);
+  if(a==null){ toast("Escribe la abscisa de la estaca "+w+" (ej. K0+100).",3500); return null; }
+  var off=parseFloat(String($("#xr"+w+"off").value||"0").replace(",","."))||0, p=pointAtAbs(a,off);
+  if(!p){ toast("La abscisa de "+w+" está fuera del tramo ("+fmtAbs1(Sm[0])+" a "+fmtAbs1(Sm[Sm.length-1])+").",4000); return null; }
+  return {x:p.x, y:(p.gy!=null?p.gy:p.y), z:p.z, abs:a, off:off, lbl:fmtAbs1(a)+(off?(" "+Math.abs(off).toFixed(1)+(off>0?"D":"I")):"")};
+}
+/* punto real en ARCore: donde la cruz toca el piso; sin detección de piso, bajo el celular */
+function xrPick(){
+  if(xr.hit) return {x:xr.hit.x,y:xr.hit.y,z:xr.hit.z,hit:true};
+  if(xr.hts){ toast("Aún no se detecta el piso donde apunta la cruz: mueve el celular despacio apuntando al suelo, cerca de la estaca (<8 m).",5000); return null; }
+  toast("Este equipo no detecta el piso: se usó tu posición (celular encima de la estaca, a "+ar.eye.toFixed(1)+" m).",4500);
+  return {x:xr.cam.x,y:xr.cam.y-ar.eye,z:xr.cam.z,hit:false};
+}
+
+function xrStart(){
+  if(!xr.supported||xr.on||!DATA||!DATA._ok) return;
+  var rough=null, h=devHeading();
+  if(h!=null && gpsFix && (compassRecent()||ar.calibrated||gh.ema!=null)){
+    var base=(ar.gy!=null?ar.gy:ar.py); rough={h:h, p:{x:ar.px, y:base+ar.dz+ar.eye, z:ar.pz}};
+  }
+  navigator.xr.requestSession("immersive-ar",{requiredFeatures:["local"],optionalFeatures:["hit-test","dom-overlay"],domOverlay:{root:$("#ui")}})
+    .then(function(s){ xrBegin(s,rough); })
+    .catch(function(e){ toast("No se pudo iniciar AR Pro: "+((e&&e.message)||e)+". Revisa «Servicios de Google Play para RA».",6500); });
+}
+function xrBegin(s,rough){
+  xr.session=s; xr.on=true; xr.hts=null; xr.hit=null; xr.A=null; xr.aligned=false; xr.rotSrc=""; xr.posSrc=""; xr.q=null;
+  xr.lost=false; xr.lostT=0; xr.gpsD=null; xr.forceB=0;
+  xr.overlay=!!(s.domOverlayState&&s.domOverlayState.type);
+  stopCam(); stopGyro(); wakeOn();
+  scene.background=null; worldRoot.visible=false; clearXrMarks();
+  document.body.classList.add("xr"); panelShow(false);
+  $("#xrSetupSlot").appendChild($("#xrSetup")); $("#xrBar").classList.remove("hide"); $("#xrBody").classList.remove("min");
+  $("#hbXrRow").classList.remove("hide");
+  s.addEventListener("end",xrEnd);
+  s.addEventListener("select",function(){ if(!xr.overlay) xrTapFallback(); });
+  renderer.xr.enabled=true; renderer.xr.setReferenceSpaceType("local");
+  renderer.xr.setSession(s).then(function(){
+    if(typeof s.requestHitTestSource==="function"){
+      s.requestReferenceSpace("viewer").then(function(vs){ return s.requestHitTestSource({space:vs}); })
+        .then(function(h){ xr.hts=h; }).catch(function(){ xr.hts=null; });
+    }
+    if(rough){   // el origen de ARCore es el celular al iniciar, mirando a −Z  →  giro = rumbo del celular
+      xrApply(rough.h, tFor(rough.h,{x:0,y:0,z:0},rough.p));
+      xr.rotSrc="brújula (aprox.)"; xr.posSrc="GPS (aprox.)";
+      toast("Vista aproximada (GPS + brújula, puede estar corrida varios metros). Captura A y B para fijarla.",6000);
+    } else toast("Apunta la cruz a la base de la estaca A y toca «Capturar A».",5000);
+    if(!xr.overlay) toast("Sin panel en pantalla: toca la pantalla para capturar A y luego B (usa las abscisas ya escritas). Atrás = salir.",8000);
+    xrStatus();
+  }).catch(function(e){ toast("Error al iniciar AR Pro: "+((e&&e.message)||e),5000); try{ s.end(); }catch(_){ } });
+  updFabs();
+}
+function xrEnd(){
+  xr.on=false; xr.session=null; xr.hts=null; xr.hit=null; xr.aligned=false;
+  reticle.visible=false; clearXrMarks();
+  worldRoot.matrix.identity(); worldRoot.matrixWorldNeedsUpdate=true; worldRoot.visible=true;
+  scene.background=new THREE.Color(0x0e1418);
+  renderer.xr.enabled=false;
+  document.body.classList.remove("xr");
+  $("#xrSetupBox").appendChild($("#xrSetup")); $("#xrBar").classList.add("hide"); $("#hbXrRow").classList.add("hide");
+  hudCache={};
+  setTimeout(onResize,50);
+  obsKey=null; arSm.x=null;
+  if(mode==="ar") setMode("ar");
+  toast("Saliste de AR Pro. La alineación se pierde al salir: al volver, captura A y B de nuevo.",4000);
+}
+function xrTapFallback(){ if(!xr.A) xrCapA(); else if(xr.rotSrc!=="A–B") xrCapB(); else xrCapA(); }
+
+function xrCapA(){
+  var W=xrStake("A"); if(!W) return; var X=xrPick(); if(!X) return;
+  xr.A={w:W,x:X}; xrMarkAt(X,0x35c0d6,"A "+W.lbl);
+  if(xr.aligned){
+    xrApply(xr.phi,tFor(xr.phi,X,W)); xr.posSrc="estaca "+W.lbl;
+    toast("A ✓ "+W.lbl+(xr.rotSrc==="A–B"?" · posición re-anclada (se conserva el giro).":" · posición fijada. Ahora captura B o 🎯 apunta a B para fijar el giro."),4500);
+  } else toast("A ✓ "+W.lbl+". Ahora camina a la estaca B y «Capturar B», o desde aquí «🎯 Apuntar a B».",5500);
+  xrStatus();
+}
+function xrCapB(){
+  if(!xr.A){ toast("Primero captura A.",3000); return; }
+  var W=xrStake("B"); if(!W) return; var X=xrPick(); if(!X) return;
+  var A=xr.A, wx=W.x-A.w.x, wz=W.z-A.w.z, xx=X.x-A.x.x, xz=X.z-A.x.z, Lw=Math.hypot(wx,wz), Lx=Math.hypot(xx,xz);
+  if(Lw<5){ toast("A y B están a "+Lw.toFixed(1)+" m: muy cerca para fijar el giro. Usa estacas a 20 m o más.",5000); return; }
+  var dL=Lx-Lw, tol=Math.max(0.5,0.03*Lw), now=Date.now();
+  if(Math.abs(dL)>tol && !(xr.forceB && now-xr.forceB<10000)){
+    xr.forceB=now;
+    toast("⚠ A–B no cuadra: diseño "+Lw.toFixed(2)+" m, medido "+Lx.toFixed(2)+" m (dif. "+dL.toFixed(2)+" m). Revisa abscisas, laterales o la estaca. Toca «Capturar B» otra vez antes de 10 s para aplicar igual.",9000);
+    return;
+  }
+  xr.forceB=0;
+  var phi=normAng(angXZ(xx,xz)-angXZ(wx,wz)), tA=tFor(phi,A.x,A.w), tB=tFor(phi,X,W);
+  xrApply(phi,[(tA[0]+tB[0])/2,(tA[1]+tB[1])/2,(tA[2]+tB[2])/2]);
+  xr.rotSrc="A–B"; xr.posSrc=A.w.lbl+" + "+W.lbl; xr.q={L:Lw,dL:dL,dh:(X.y-A.x.y)-(W.y-A.w.y)};
+  xrMarkAt(X,0xff9f43,"B "+W.lbl);
+  // B pasa a ser la nueva A: para avanzar por la vía se sigue encadenando estacas
+  xr.A={w:W,x:X};
+  $("#xrAabs").value=$("#xrBabs").value; $("#xrAoff").value=$("#xrBoff").value; $("#xrBabs").value=""; $("#xrBabs").placeholder="siguiente estaca";
+  $("#xrBody").classList.add("min"); $("#xrMin").textContent="▴";   // despeja la vista; ▴ para volver a abrir
+  toast("✓ Alineado A–B ("+Lw.toFixed(1)+" m, dif. "+(Math.abs(dL)*100).toFixed(0)+" cm). B quedó como nueva A: más adelante captura otra B para seguir fijo.",7000);
+  xrStatus();
+}
+function xrAimB(){
+  if(!xr.A){ toast("Primero captura A, parado junto a la estaca A.",3500); return; }
+  var W=xrStake("B"); if(!W) return;
+  var A=xr.A, vx=W.x-A.w.x, vz=W.z-A.w.z, L=Math.hypot(vx,vz);
+  if(L<15){ toast("B está a "+L.toFixed(0)+" m de A: para apuntar usa una estaca a 30 m o más, o camina hasta B y usa «Capturar B».",5500); return; }
+  var f=new THREE.Vector3(0,0,-1).applyQuaternion(xr.camQ), fh=Math.hypot(f.x,f.z);
+  if(fh<0.3){ toast("Sostén el celular vertical, con la cruz sobre la estaca B.",3500); return; }
+  var ux=f.x/fh, uz=f.z/fh, dx=xr.cam.x-A.x.x, dz=xr.cam.z-A.x.z, dd=Math.hypot(dx,dz);
+  if(dd>Math.min(10,L*0.4)){ toast("Estás a "+dd.toFixed(1)+" m de A: apunta a B parado junto a A.",4500); return; }
+  // el rayo desde el celular (d) en dirección u debe tocar B:  R·v = d + s·u,  |R·v| = L
+  var du=dx*ux+dz*uz, s=-du+Math.sqrt(Math.max(0,du*du-dd*dd+L*L)), rx=dx+s*ux, rz=dz+s*uz;
+  var phi=normAng(angXZ(rx,rz)-angXZ(vx,vz));
+  xrApply(phi,tFor(phi,A.x,A.w));
+  xr.rotSrc="apuntado a "+W.lbl+" ("+L.toFixed(0)+" m)"; xr.posSrc="estaca "+A.w.lbl; xr.q=null;
+  toast("✓ Giro fijado apuntando a B ("+L.toFixed(0)+" m). Para lo más preciso, camina a B y usa «Capturar B».",5500);
+  xrStatus();
+}
+$("#xrA").onclick=xrCapA; $("#xrB").onclick=xrCapB; $("#xrBaim").onclick=xrAimB;
+$("#xrBtn").onclick=xrStart; $("#xrFab").onclick=xrStart;
+$("#xrExit").onclick=function(){ if(xr.session) xr.session.end().catch(function(){}); };
+$("#xrMin").onclick=function(){ var b=$("#xrBody"); b.classList.toggle("min"); this.textContent=b.classList.contains("min")?"▴":"▾"; };
+$("#ui").addEventListener("beforexrselect",function(e){ if(e.target!==$("#ui")) e.preventDefault(); });
+
+function xrStatus(){
+  var t, col="";
+  if(xr.lost){ t="⚠ Seguimiento perdido — mueve despacio, con luz, apuntando a zonas con textura"; col="#e5603e"; }
+  else if(!xr.aligned){ t=xr.A?"A ✓ — falta fijar el giro (B)":"Sin alinear — captura la estaca A"; col="#e0a43b"; }
+  else if(xr.rotSrc==="A–B"){ t="✓ Fijo A–B · dif. "+(Math.abs(xr.q.dL)*100).toFixed(0)+" cm en "+xr.q.L.toFixed(0)+" m"; col="#3fb27f"; }
+  else if(xr.rotSrc.indexOf("apuntado")===0){ t="✓ Giro "+xr.rotSrc; col="#3fb27f"; }
+  else { t="≈ Aproximado (GPS + brújula) — captura A y B"; col="#e0a43b"; }
+  setTxt("xrStat",t,col); setTxt("hbXr",xr.aligned?(xr.rotSrc==="A–B"?"fijo A–B":xr.rotSrc.split(" ")[0]):(xr.lost?"perdido":"sin alinear"),col);
+  var help;
+  if(!xr.A) help="Apunta la cruz a la base de la estaca A (en el piso, a menos de 8 m) y toca «Capturar A».";
+  else if(xr.rotSrc!=="A–B") help="Camina hasta la estaca B y captúrala con la cruz (lo más preciso), o desde A pon la cruz sobre B lejana y toca «Apuntar a B».";
+  else help="Listo. Si avanzas más de ~100 m o notas corrimiento, captura la siguiente estaca como B (A ya es la última).";
+  if(xr.gpsD!=null && xr.aligned && xr.gpsD>Math.max(10,2*(gpsLastAcc||0))) help="⚠ La posición visual difiere "+xr.gpsD.toFixed(0)+" m del GPS: posible deriva o estaca equivocada. Re-captura A en una estaca cercana.";
+  setTxt("xrHelp",help);
+}
+var _xv=new THREE.Vector3();
+function xrFrame(xf){
+  if(!xf) return;
+  var ref=renderer.xr.getReferenceSpace(); if(!ref) return;
+  var vp=xf.getViewerPose(ref), now=performance.now();
+  if(vp){ var p=vp.transform.position, o=vp.transform.orientation; xr.cam.set(p.x,p.y,p.z); xr.camQ.set(o.x,o.y,o.z,o.w); xr.lost=!!vp.emulatedPosition; }
+  else xr.lost=true;
+  if(xr.lost){ if(!xr.lostT) xr.lostT=now;
+    if(now-xr.lostT>1500 && now-xr.lastToast>7000){ xr.lastToast=now; toast("Seguimiento perdido: mueve el celular despacio, con buena luz, apuntando a zonas con textura (no al cielo ni a superficies lisas).",5000); } }
+  else xr.lostT=0;
+  xr.hit=null;
+  if(xr.hts){ try{ var hr=xf.getHitTestResults(xr.hts);
+    if(hr&&hr.length){ var hp=hr[0].getPose(ref); if(hp){ var q=hp.transform.position; xr.hit=new THREE.Vector3(q.x,q.y,q.z); } } }catch(e){} }
+  reticle.visible=!!xr.hit; if(xr.hit) reticle.position.copy(xr.hit);
+  if(xr.aligned && !xr.lost){
+    _xv.copy(xr.cam).applyMatrix4(xr.Mi);
+    ar.px=_xv.x; ar.pz=_xv.z;
+    if(now-(xr.trkT||0)>100){ xr.trkT=now; obsKey=null; }   // re-evalúa aunque el celular esté quieto (confirma saltos de rama en ~0,3 s)
+    obsUpdate();
+  }
+}
+
+/* =====================================================================
+   RECORRER — reproducción automática por la vía
+   ===================================================================== */
+var play={on:false,s:0,dir:1,kmh:40,lane:"der",last:0,yawS:null,pitchS:null,sliderT:0};
+function laneOff(){ var q=(DATA&&+DATA.lane>0?+DATA.lane:6)/4;   // centro del carril
+  return play.lane==="eje"?0:(play.lane==="der"?q:-q)*play.dir; }
+function sMin(){ return Sm[0]; } function sMax(){ return Sm[Sm.length-1]; }
+/* ubica la cámara en la abscisa s mirando ~20 m adelante (sigue curvas y pendiente) */
+function playPlace(s,snap){
+  s=Math.max(sMin(),Math.min(sMax(),s)); play.s=s;
+  var off=laneOff(), p=pointAtAbs(s,off); if(!p) return;
+  var la=Math.max(sMin(),Math.min(sMax(),s+play.dir*20)), q=pointAtAbs(la,off);
+  var yaw=walk.yaw, pitch=walk.pitch;
+  if(q && Math.hypot(q.x-p.x,q.z-p.z)>0.5){ var dx=q.x-p.x, dz=q.z-p.z, h=Math.hypot(dx,dz);
+    yaw=-Math.atan2(dx,-dz); pitch=Math.atan2(q.y-p.y,h)-0.04; }
+  if(snap||play.yawS==null){ play.yawS=yaw; play.pitchS=pitch; walkTrk=newTrk(); }   // salto: la abscisa se busca en todo el eje
+  else { play.yawS+=normAng(yaw-play.yawS)*0.12; play.pitchS+=(pitch-play.pitchS)*0.08; }
+  walk.pos.x=p.x; walk.pos.z=p.z; walk.yaw=play.yawS; walk.pitch=play.pitchS;
+  walkKey=null;   // walkFollow recalcula abscisa y altura (rasante + ojo)
+}
+function playSet(on){
+  play.on=on; play.last=performance.now();
+  $("#pbPlay").textContent=on?"⏸":"▶";
+  if(on){ if((play.dir>0&&play.s>=sMax()-0.05)||(play.dir<0&&play.s<=sMin()+0.05)) playPlace(play.dir>0?sMin():sMax(),true);
+    else { var r=walkR||walkFollow(); playPlace(r.abs,true); } }
+}
+function playStep(now){
+  var dt=Math.min(0.1,(now-play.last)/1000); play.last=now;
+  var ns=play.s+play.dir*play.kmh/3.6*dt;
+  if(ns>=sMax()||ns<=sMin()){ playPlace(ns,false); playSet(false); toast("Fin del recorrido: "+fmtAbs1(play.s),2500); return; }
+  playPlace(ns,false);
+}
+function gradeAt(a){ var a0=Math.max(sMin(),a-5), a1=Math.min(sMax(),a+5), p0=pointAtAbs(a0,0), p1=pointAtAbs(a1,0);
+  if(!p0||!p1||a1-a0<0.5) return null; return (p1.y-p0.y)/Math.hypot(p1.x-p0.x,p1.z-p0.z)*100; }
+function arrAt(A,a){ var N=Sm.length; if(a<=Sm[0]) return +A[0]; if(a>=Sm[N-1]) return +A[N-1];
+  var lo=1,hi=N-1; while(lo<hi){ var m=(lo+hi)>>1; if(Sm[m]<a) lo=m+1; else hi=m; }
+  var t=(a-Sm[lo-1])/((Sm[lo]-Sm[lo-1])||1); return +A[lo-1]+(+A[lo]-+A[lo-1])*t; }
+function peralteAt(a){ if(!PE) return null; return arrAt(PE,a); }
+function fmtPct(v){ return (v>=0?"+":"−")+Math.abs(v).toFixed(1); }
+function playInfo(r){
+  var a=r.abs; setTxt("piAbs",fmtAbs1(a));
+  var g=gradeAt(a), pe=peralteAt(a);
+  $("#piCota").innerHTML="Cota <b>"+(r.py+anchor.z).toFixed(2)+"</b>";
+  $("#piPend").innerHTML="Pend. <b>"+(g==null?"—":((g>=0?"+":"")+g.toFixed(1)+" %"))+"</b>";
+  if(PEL){ var pl=arrAt(PEL,a), pr=arrAt(PER,a); $("#piPer").innerHTML="Peralte <b>I "+fmtPct(pl)+" · D "+fmtPct(pr)+" %</b>"; }
+  else $("#piPer").innerHTML=pe==null?"":("Peralte <b>"+(pe>=0?"+":"")+pe.toFixed(1)+" %</b>");
+  var ct=[curvaTxt(a,true),curvaVTxt(a)].filter(Boolean).join("  ·  "); setTxt("piCur",ct);
+  var now=performance.now();
+  if(now-play.sliderT>200 && document.activeElement!==$("#pbSlider")){ play.sliderT=now; $("#pbSlider").value=a.toFixed(1); }
+}
+function playSetup(){
+  var sl=$("#pbSlider"); sl.min=sMin().toFixed(1); sl.max=sMax().toFixed(1); sl.value=sMin().toFixed(1);
+  $("#pbEnd").textContent=fmtAbs(sMax());
+  play.s=sMin(); play.dir=1; $("#pbDir").textContent="→ K+"; play.yawS=null; playSet(false);
+}
+$("#pbPlay").onclick=function(){ playSet(!play.on); };
+$("#pbStart").onclick=function(){ playSet(false); playPlace(play.dir>0?sMin():sMax(),true); };
+$("#pbDir").onclick=function(){ play.dir=-play.dir; this.textContent=play.dir>0?"→ K+":"← K−";
+  var r=walkR||walkFollow(); playPlace(r.abs,true); toast(play.dir>0?"Sentido: abscisas crecientes":"Sentido: abscisas decrecientes",1800); };
+$("#pbSpeed").onchange=function(){ play.kmh=+this.value; lsSet("viaAR_pbSpeed",this.value); };
+$("#pbLane").onchange=function(){ play.lane=this.value; var r=walkR||walkFollow(); playPlace(r.abs,true); };
+$("#pbSlider").oninput=function(){ playPlace(+this.value,true); };
+(function(){ var v=lsGet("viaAR_pbSpeed","40"); if($("#pbSpeed").querySelector('option[value="'+v+'"]')){ $("#pbSpeed").value=v; play.kmh=+v; } })();
+addEventListener("keydown",function(e){ if(mode==="walk" && e.code==="Space" && !isField(e.target)){ e.preventDefault(); playSet(!play.on); } });
+
 /* ---------- modos ---------- */
+function updFabs(){
+  var ok=!!(DATA&&DATA._ok);
+  $("#markBtn").classList.toggle("hide", !ok || mode==="orbit");
+  $("#measureBtn").classList.toggle("hide", !ok || mode!=="map");
+  $("#centerBtn").classList.toggle("hide", !(ok && mode==="map" && !map.follow));
+  $("#cross").classList.toggle("show", ok && mode==="map" && !(map.follow && gpsFix));
+  $("#xrFab").classList.toggle("hide", !(ok && mode==="ar" && xr.supported && !xr.on));
+}
+function applyModeVis(){
+  if(demG) demG.visible=($("#colorMode").value==="asfalto");
+  if(gridObj) gridObj.visible=(mode==="orbit"||mode==="walk"||mode==="map");
+}
 function setMode(m){
+  if(m!=="walk" && play.on) playSet(false);
   mode=m; stopGyro();
+  $("#playBar").classList.toggle("hide",m!=="walk"); document.body.classList.toggle("walkmode",m==="walk");
   if(m!=="ar" && m!=="map") stopGps();
   if(m!=="ar") stopCam();
+  if(m!=="map" && measure.on){ measure.on=false; $("#measureBtn").classList.remove("on"); measureClear(); }
   document.querySelectorAll("#modeSeg button").forEach(function(b){ b.classList.toggle("on", b.dataset.m===m); });
-  $("#arControls").style.display=(m==="ar")?"block":"none";
-  $("#gpsControls").style.display=(m==="ar"||m==="map")?"block":"none";
-  $("#centerBtn").classList.toggle("hide", !(m==="map" && !map.follow));
-  setLabelScale(1);
+  showTab(curTab[m]);
+  $("#panelTitle").textContent = m==="ar"?"Ajustes AR":m==="map"?"Ajustes · Mapa en vivo":m==="walk"?"Ajustes · Recorrer":"Ajustes de vista";
+  $("#hbGpsRow").classList.toggle("hide", !(m==="ar"||m==="map"));
+  $("#hbAncRow").classList.toggle("hide", !(m==="ar"||m==="map"));
+  $("#hbHdgRow").classList.toggle("hide", !(m==="ar"||m==="map"));
+  applyFov();
+  setLabelScale(1,true);
+  tiles.key="";
+  applyModeVis();
+  if(m==="ar") wakeOn(); else if(gpsWatch==null) wakeOff();
+  updFabs();
   if(!Cw.length) return;
   if(m==="orbit"){ frameAll(); }
-  else if(m==="walk"){ var i=0; walkTrk=newTrk(); walk.pos.set(Cw[i][0], Cw[i][1]+ar.eye, Cw[i][2]);
-    walk.yaw=-ejeAz(i); walk.pitch=-0.05; walk.apply();              // [nav2] signo corregido: mira en sentido de avance
-    toast("Arrastra para mirar · WASD o pellizca para avanzar por la vía",3800); }
+  else if(m==="walk"){ walkTrk=newTrk(); walkR=null; walkKey=null; walk.pos.set(Cw[0][0], Cw[0][1]+ar.eye, Cw[0][2]);
+    playSetup(); playPlace(sMin(),true); walkFollow();
+    toast("▶ para recorrer la vía · arrastra para mirar · WASD o pellizca para moverte a mano (pausa la reproducción).",4200); }
   else if(m==="map"){
     map.follow=true;
     if(gpsFix) map.h=Math.min(Math.max(map.h,60),300); else mapFrameAll();
-    if(gpsWatch==null) startGps();
+    if(gpsWatch==null && P4) startGps();
     startGyro(true);
-    toast("Mapa en vivo (norte arriba): la vía queda fija y el punto azul eres tú. Arrastra para mover, pellizca para zoom.",5000);
+    updFabs();
+    toast(P4?"Mapa en vivo (norte arriba): la vía queda fija y el punto azul eres tú. Arrastra para mover, pellizca para zoom."
+            :"Mapa sin GPS (el JSON no trae CRS). Arrastra para mover; 🚩 Marcar usa la cruz del centro.",5000);
   }
   else if(m==="ar"){ if(!(gpsWatch!=null && gpsFix)) paradoEn(0,8); obsKey=null; arApply(); startGyro(false);
-    if(gpsWatch==null && DATA && DATA.crs && DATA.crs.proj) startGps(); }   // [gpsauto] el GPS arranca solo al entrar a AR
+    if(gpsWatch==null && P4) startGps();
+    if(hdgSrc==="compass" && declDeg===0) setTimeout(function(){ if(mode==="ar") toast("Declinación en 0°: la brújula puede quedar girada varios grados. Ingrésala en ⚙ o usa 🎯 Calibrar.",5500); },5200);
+  }
 }
 document.querySelectorAll("#modeSeg button").forEach(function(b){ b.onclick=function(){ if(DATA&&DATA._ok) setMode(b.dataset.m); }; });
 
-/* ---------- panel ---------- */
-$("#gear").onclick=function(){ $("#panel").classList.toggle("show"); };
-$("#panelClose").onclick=function(){ $("#panel").classList.remove("show"); };
-$("#eye").oninput=function(){ ar.eye=+this.value; $("#eyeV").textContent=ar.eye.toFixed(1)+" m"; };
-$("#yawFine").oninput=function(){ var g=+this.value; ar.yawFine=g*d2r; $("#yawFineV").textContent=g.toFixed(1)+"°"; };
-function nudgeObs(dRight,dFwd){                 // +dRight=derecha del eje, +dFwd=adelante
-  if(!Cw.length) return;
-  var az=ejeAz(ar.idx);
-  var fx=Math.sin(az), fz=-Math.cos(az), rx=Math.cos(az), rz=Math.sin(az);
-  var mx=rx*dRight+fx*dFwd, mz=rz*dRight+fz*dFwd;
-  if(gpsWatch!=null && gpsEMA){                 // con GPS: el ajuste corrige el ancla (no se pierde en la próxima lectura)
-    if(!gpsCorr.on) gpsCorr={dx:0,dz:0,on:true,t:Date.now()};
-    gpsCorr.dx+=mx; gpsCorr.dz+=mz; applyGpsPos();
-    toast("Corrección GPS: "+Math.hypot(gpsCorr.dx,gpsCorr.dz).toFixed(1)+" m",1500);
-  } else { ar.px+=mx; ar.pz+=mz; obsKey=null; }
+/* ---------- panel: pestañas por tarea (solo las que sirven en cada modo) ---------- */
+var TABS={orbit:["capas","ir","proy"], walk:["capas","ir","proy"], map:["gps","ir","capas","proy"], ar:["ar","gps","ir","capas","proy"]};
+var curTab={};
+function tabsFor(){ var t=(TABS[mode]||TABS.orbit).slice(); if(!P4 && mode==="map") t=t.filter(function(x){ return x!=="gps"; }); if(xr.on) t=t.filter(function(x){ return x==="ir"||x==="capas"; }); return t; }
+function showTab(t){
+  var av=tabsFor(); if(av.indexOf(t)<0) t=av[0]; curTab[mode]=t;
+  document.querySelectorAll("#ptabs button").forEach(function(b){ b.style.display=av.indexOf(b.dataset.t)>=0?"":"none"; b.classList.toggle("on",b.dataset.t===t); });
+  document.querySelectorAll("#panel .tab").forEach(function(s){ s.classList.toggle("on",s.id==="tab-"+t); });
+  $("#panel").scrollTop=0;
 }
-$("#mvL").onclick=function(){ nudgeObs(-1,0); };
-$("#mvR").onclick=function(){ nudgeObs( 1,0); };
-$("#mvF").onclick=function(){ nudgeObs(0, 1); };
-$("#mvB").onclick=function(){ nudgeObs(0,-1); };
+document.querySelectorAll("#ptabs button").forEach(function(b){ b.onclick=function(){ showTab(b.dataset.t); }; });
+function gpsTabMode(){   // sin CRS la pestaña sirve para ubicarse por abscisa
+  $("#gpsRow").style.display=P4?"":"none";
+  $("#ancTitle").innerHTML=P4?'📌 Ancla <span class="tag2">quita el corrimiento del GPS</span>':'📌 Ubicarme <span class="tag2">proyecto sin coordenadas</span>';
+  $("#ancHint").textContent=P4?"Párate sobre una estaca o PR conocido, escribe su abscisa y ancla.":"Escribe la abscisa donde estás parado y toca Ubicarme.";
+  $("#ancBtn").textContent=P4?"📌 Anclar (8 s)":"📌 Ubicarme";
+  $("#ancClr").style.display=P4?"":"none";
+}
+function projInfo(){
+  if(!DATA) return; gpsTabMode();
+  var ll=anchor.lat!=null?[+anchor.lon,+anchor.lat]:toLL(anchor.e,anchor.n), el=$("#projInfo"); el.innerHTML="";
+  [["Proyecto",DATA.proyecto||"(sin nombre)"],["Tramo",fmtAbs(Sm[0])+" a "+fmtAbs(Sm[Sm.length-1])+" · "+roadLen.toFixed(0)+" m"],
+   ["Calzada",laneW+" m"],["Georreferencia",P4?(ll?(ll[1].toFixed(5)+", "+ll[0].toFixed(5)):"sí"):"no (sin GPS ni mapa base)"],
+   ["Incluye",[PEL?"peralte izq/der":(PE?"peralte":null),CURV.length?CURV.length+" curvas":null,CURVV.length?CURVV.length+" curvas vert.":null,OBRAS.length?OBRAS.length+" obras":null,CF?"terreno":null,(chafG&&chafG.children.length)?"chaflanes/DV":null,(DATA.hitos&&DATA.hitos.length)?DATA.hitos.length+" hitos":null].filter(Boolean).join(" · ")||"solo calzada"]]
+  .forEach(function(r){ var d=document.createElement("div"); d.textContent=r[0]+": "; var b=document.createElement("b"); b.textContent=r[1]; d.appendChild(b); el.appendChild(d); });
+}
+
+/* ---------- panel ---------- */
+function panelShow(on){ $("#panel").classList.toggle("show",on); document.body.classList.toggle("panelOpen",on); }
+$("#gear").onclick=function(){ var on=!$("#panel").classList.contains("show"); if(on) showTab(curTab[mode]); panelShow(on); };
+$("#panelClose").onclick=function(){ panelShow(false); };
+$("#dz").oninput=function(){ ar.dz=+this.value; $("#dzV").textContent=(ar.dz>0?"+":"")+ar.dz+" m"; };
+$("#fov").oninput=function(){ fovLong=+this.value; $("#fovV").textContent=fovLong+"°"; lsSet("viaAR_fov",String(fovLong)); applyFov(); };
+$("#yawFine").oninput=function(){ var g=+this.value; ar.yawFine=g*d2r; $("#yawFineV").textContent=g.toFixed(1)+"°"; };
 $("#opac").oninput=function(){ var v=+this.value; $("#opacV").textContent=v+"%"; if(meshObj){ meshObj.material.opacity=v/100; } };
 $("#colorMode").onchange=function(){ if(DATA&&DATA._ok) build(DATA,true); };
-$("#postInt").onchange=function(){ if(DATA && DATA._ok){ buildPosts(+this.value||0); labelK=1; if(mode==="map") setLabelScale(Math.max(1,map.h/45)); } };
-$("#hitosOn").onchange=function(){ if(DATA && DATA._ok){ buildHitos(this.checked); labelK=1; if(mode==="map") setLabelScale(Math.max(1,map.h/45)); } };
-$("#reset").onclick=function(){ if(!DATA||!DATA._ok) return; if(mode==="orbit")frameAll(); else if(mode==="map"){ map.follow=true; $("#centerBtn").classList.add("hide"); if(!gpsFix) mapFrameAll(); } else setMode(mode); };
-$("#reload").onclick=function(){ $("#drop").classList.remove("hide"); };
+$("#postInt").onchange=function(){ if(DATA && DATA._ok){ buildPosts(+this.value||0); if(mode==="map") setLabelScale(Math.max(1,map.h/45),true); else setLabelScale(1,true); } };
+$("#hitosOn").onchange=function(){ if(DATA && DATA._ok){ buildHitos(this.checked); if(mode==="map") setLabelScale(Math.max(1,map.h/45),true); else setLabelScale(1,true); } };
+$("#chafOn").onchange=function(){ if(chafG) chafG.visible=this.checked; };
+$("#obrasOn").onchange=function(){ if(obrasG) obrasG.visible=this.checked; };
+$("#reset").onclick=function(){ if(!DATA||!DATA._ok) return; if(mode==="orbit")frameAll(); else if(mode==="map"){ map.follow=true; updFabs(); if(!gpsFix) mapFrameAll(); } else setMode(mode); };
+$("#reload").onclick=function(){ panelShow(false); renderRecent(); $("#backBtn").style.display=(DATA&&DATA._ok)?"block":"none"; $("#drop").classList.remove("hide"); };
+$("#backBtn").onclick=function(){ $("#drop").classList.add("hide"); };
 
-/* estado de navegación al cargar un proyecto nuevo */
 function resetNav(){
-  stopGps(); cancelAnchor();
+  crossKey="";
+  stopGps(); cancelAnchor(); markReset(); $("#markDlg").classList.add("hide");
   gpsCorr={dx:0,dz:0,on:false,t:0}; ghReset();
   comp.ema=null; comp.rej=0; ar.calib=0; ar.yawFine=0; $("#yawFine").value=0; $("#yawFineV").textContent="0°";
-  obsTrk=newTrk(); walkTrk=newTrk(); obsKey=null;
-  ar.abs=Sm[0]||0; ar.off=0; ar.dist=null; ar.idx=0;
+  obsTrk=newTrk(); walkTrk=newTrk(); obsKey=null; walkKey=null; walkR=null;
+  ar.abs=Sm[0]||0; ar.off=0; ar.dist=null; ar.idx=0; ar.gy=null; ar.cf=null;
   map.follow=true; labelK=1;
+  clearTarget(); measure.on=false; $("#measureBtn").classList.remove("on"); measureClear();
+  PTS=[]; rebuildPts();
 }
 
-/* ---------- carga de archivo ---------- */
-function readFile(file){ var r=new FileReader(); r.onload=function(){
-  try{ var d=JSON.parse(r.result); if(!d.ribbon){ toast("JSON no reconocido (falta 'ribbon').",4000); return; } build(d); }
-  catch(e){ toast("No se pudo leer el JSON: "+(e.message||e),4500); } }; r.readAsText(file); }
+/* ---------- carga de archivo + proyectos recientes ---------- */
+function openText(txt,fromRecent){
+  var d;
+  try{ d=JSON.parse(txt); }catch(e){ toast("No se pudo leer el JSON: "+(e.message||e),4500); return; }
+  var err=validate(d); if(err){ toast(err,5000); return; }
+  try{ build(d); }catch(e){ toast("Error al construir la vía: "+(e.message||e),6000); console.error(e); return; }
+  saveRecent(d,txt);
+}
+function saveRecent(d,txt){
+  var id=PID;
+  kvGet("recent").then(function(list){
+    list=(Array.isArray(list)?list:[]).filter(function(r){ return r.id!==id; });
+    list.unshift({id:id,name:d.proyecto||"(sin nombre)",len:Math.round(roadLen),date:Date.now(),size:txt.length});
+    var drop=list.slice(5); list=list.slice(0,5);
+    drop.forEach(function(r){ kvDel("proj:"+r.id); });
+    return kvSet("proj:"+id,txt).then(function(){ return kvSet("recent",list); });
+  }).then(function(){ askPersist(); renderRecent(); });
+}
+function renderRecent(){
+  kvGet("recent").then(function(list){
+    var box=$("#recent"); box.innerHTML="";
+    if(!Array.isArray(list)||!list.length) return;
+    var t=document.createElement("div"); t.className="rt"; t.textContent="Recientes (guardados en este equipo, funcionan sin señal)"; box.appendChild(t);
+    list.forEach(function(r){
+      var row=document.createElement("div"); row.className="rrow";
+      var b=document.createElement("button"); b.className="btn";
+      b.textContent="📂 "+r.name+" · "+r.len+" m · "+new Date(r.date).toLocaleDateString();
+      b.onclick=function(){ kvGet("proj:"+r.id).then(function(txt){ if(!txt){ toast("No se encontró el proyecto guardado.",3000); return; } openText(txt,true); }); };
+      var x=document.createElement("button"); x.className="btn x"; x.textContent="✕"; x.title="Quitar de recientes (no borra los puntos)";
+      x.onclick=function(){ kvGet("recent").then(function(l){ l=(l||[]).filter(function(q){ return q.id!==r.id; }); kvDel("proj:"+r.id); return kvSet("recent",l); }).then(renderRecent); };
+      row.appendChild(b); row.appendChild(x); box.appendChild(row);
+    });
+  });
+}
+function readFile(file){ var r=new FileReader(); r.onload=function(){ openText(String(r.result)); };
+  r.onerror=function(){ toast("No se pudo leer el archivo.",3500); }; r.readAsText(file); }
 $("#pick").onclick=function(){ $("#file").click(); };
 $("#file").onchange=function(){ if(this.files[0]) readFile(this.files[0]); this.value=""; };
 ["dragover","drop"].forEach(function(ev){ addEventListener(ev,function(e){e.preventDefault();}); });
 addEventListener("drop",function(e){ var f=e.dataTransfer&&e.dataTransfer.files&&e.dataTransfer.files[0]; if(f) readFile(f); });
+renderRecent();
 
 /* ---------- toast ---------- */
 var toastT=null;
 function toast(t,ms){ var n=$("#note"); n.textContent=t; n.classList.add("show");
+  var pb=$("#playBar"); n.style.top=(mode==="walk"&&pb&&!pb.classList.contains("hide"))?(pb.getBoundingClientRect().bottom+8)+"px":"";   // debajo de la barra de Recorrer
   clearTimeout(toastT); toastT=setTimeout(function(){ n.classList.remove("show"); }, ms||3000); }
 
 /* ---------- loop ---------- */
-addEventListener("resize",function(){ camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth,innerHeight); });
+function onResize(){ if(renderer.xr.isPresenting) return;
+  camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix(); applyFov(); renderer.setSize(innerWidth,innerHeight); tiles.key=""; }
+addEventListener("resize",onResize);
 var hudT=0;
-(function loop(){ requestAnimationFrame(loop);
+/* setAnimationLoop: funciona igual en pantalla normal y dentro de la sesión WebXR */
+renderer.setAnimationLoop(function(time,xf){
   var now=performance.now();
   if(DATA && DATA._ok){
-    if(mode==="walk"){ walkStep();
-      var r=trackProject(camera.position.x,camera.position.z,walkTrk,0);
-      if(now-hudT>150){ hudT=now; hudUpdate(r); } }
+    if(xr.on){ xrFrame(xf); if(now-hudT>150){ hudT=now; hudUpdate(); xrStatus(); } }
+    else if(mode==="walk"){ if(play.on) playStep(now); walkStep(); var r=walkFollow(); if(now-hudT>150){ hudT=now; hudUpdate(r); playInfo(r); } }
     else if(mode==="ar"){ arApply(); if(now-hudT>150){ hudT=now; hudUpdate(); } }
-    else if(mode==="map"){ mapApply(); setLabelScale(Math.max(1,map.h/45)); if(now-hudT>150){ hudT=now; hudUpdate(); } }
-    meUpdate();
+    else if(mode==="map"){ mapApply(); setLabelScale(Math.max(1,map.h/45)); if(now-hudT>150){ hudT=now; hudUpdate(); updFabs(); } }
+    else if(tgt && now-hudT>300){ hudT=now; hudUpdate(); }
+    meUpdate(); tgtUpdate(); ptsScale(); declutter(); crossUpdate(); tilesUpdate();
   }
-  renderer.render(scene,camera);
-})();
+  renderer.render(scene,activeCam());
+});
+xrCheck();
 
+window.__visor={ get state(){ return {mode:mode,gpsFix:gpsFix,ar:ar,map:map,PTS:PTS,tgt:tgt,PID:PID,tiles:Object.keys(tiles.m).length,walkR:walkR,camera:camera,mem:renderer.info.memory,labelK:labelK,renderer:renderer,scene:scene,group:group,xr:xr,worldRoot:worldRoot}; }, api:{pointAtAbs:pointAtAbs,devHeading:devHeading,ejeAz:ejeAz,play:play} };
 }/* main */
 </script>
 </body>

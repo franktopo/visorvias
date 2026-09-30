@@ -1,0 +1,16 @@
+{
+  "name": "Visor AR — Vía (RoadExtract)",
+  "short_name": "Visor Vía",
+  "description": "Visor de campo de la vía diseñada en RoadExtract Pro: mapa en vivo con GPS, AR, marcación de puntos y exportación.",
+  "lang": "es",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0e1418",
+  "theme_color": "#17212b",
+  "icons": [
+    {"src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable"},
+    {"src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"}
+  ]
+}
